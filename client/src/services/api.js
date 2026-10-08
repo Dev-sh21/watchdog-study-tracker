@@ -24,6 +24,24 @@ function getHeaders() {
 }
 
 // ================= AUTH APIs =================
+export async function loginWithGoogle(email, name, exam = 'GATE') {
+  const res = await fetch(`${API_BASE}/auth/google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, name, exam })
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || 'Google login failed');
+  }
+  const data = await res.json();
+  if (data.token) setAuthToken(data.token);
+  return data;
+}
+
+export function logoutUser() {
+  setAuthToken('');
+}
 export async function loginUser(username, password) {
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',

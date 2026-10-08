@@ -198,6 +198,72 @@ app.post('/api/auth/register', (req, res) => {
   });
 });
 
+// Google Sign-In endpoint
+app.post('/api/auth/google', (req, res) => {
+  const { email, name, exam = 'GATE' } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: 'Google email is required' });
+  }
+
+  const normalized = email.trim().toLowerCase();
+  let user = db.prepare('SELECT * FROM users WHERE username = ?').get(normalized);
+
+  if (!user) {
+    const preset = EXAM_PRESETS[exam.toUpperCase()] || EXAM_PRESETS.GATE;
+    const pass = hashPassword(crypto.randomBytes(16).toString('hex'));
+    const token = crypto.randomBytes(24).toString('hex');
+
+    const result = db.prepare(`
+      INSERT INTO users (username, name, password_hash, salt, selected_exam, exam_name, exam_date, daily_goal_hours, theme, subjects, token)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'dark', ?, ?)
+    `).run(
+      normalized,
+      name || normalized.split('@')[0],
+      pass.hash,
+      pass.salt,
+      exam.toUpperCase(),
+      preset.exam_name,
+      preset.exam_date,
+      preset.daily_goal_hours,
+      JSON.stringify(preset.subjects),
+      token
+    );
+
+    const newUserId = result.lastInsertRowid;
+
+    db.prepare(`
+      INSERT INTO user_timer (user_id, is_running, elapsed_seconds, start_time_ms, active_target_id, active_subject, laps, updated_at)
+      VALUES (?, 0, 0, 0, NULL, ?, '[]', ?)
+    `).run(newUserId, preset.subjects[0] || 'General', Date.now());
+
+    db.prepare('INSERT INTO user_notepads (user_id, content) VALUES (?, ?)').run(
+      newUserId,
+      `# 🎯 My ${preset.exam_name} Study Notes\n- Google Calendar linked!`
+    );
+
+    user = db.prepare('SELECT * FROM users WHERE id = ?').get(newUserId);
+  } else {
+    if (!user.token) {
+      const token = crypto.randomBytes(24).toString('hex');
+      db.prepare('UPDATE users SET token = ? WHERE id = ?').run(token, user.id);
+      user.token = token;
+    }
+  }
+
+  res.json({
+    id: user.id,
+    username: user.username,
+    name: user.name,
+    selected_exam: user.selected_exam,
+    exam_name: user.exam_name,
+    exam_date: user.exam_date,
+    daily_goal_hours: user.daily_goal_hours,
+    theme: user.theme || 'dark',
+    subjects: JSON.parse(user.subjects || '[]'),
+    token: user.token
+  });
+});
+
 // Login
 app.post('/api/auth/login', (req, res) => {
   const { username, password } = req.body;

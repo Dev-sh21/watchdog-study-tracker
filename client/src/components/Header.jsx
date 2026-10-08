@@ -17,7 +17,9 @@ import {
   Users,
   GraduationCap,
   Landmark,
-  ChevronDown
+  ChevronDown,
+  Calendar,
+  LogOut
 } from 'lucide-react';
 
 export default function Header() {
@@ -30,6 +32,7 @@ export default function Header() {
     setIsAuthModalOpen,
     currentUser,
     switchExam,
+    logout,
     theme,
     toggleTheme,
     settings,
@@ -210,6 +213,17 @@ export default function Header() {
               <span className="hidden sm:inline">Phone Sync</span>
             </button>
 
+            {/* Direct Google Calendar Shortcut */}
+            <a
+              href="https://calendar.google.com/calendar/u/0/r"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-indigo-400 hover:text-indigo-300 transition cursor-pointer hidden sm:flex items-center gap-1"
+              title="Open My Google Calendar"
+            >
+              <Calendar className="w-4 h-4" />
+            </a>
+
             {/* Settings Button */}
             <button
               onClick={() => setIsSettingsModalOpen(true)}
@@ -217,6 +231,15 @@ export default function Header() {
               title="Settings & Exam Customization"
             >
               <Settings className="w-5 h-5" />
+            </button>
+
+            {/* Log Out Button */}
+            <button
+              onClick={logout}
+              className="p-2 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/30 transition cursor-pointer"
+              title="Sign Out (Go to Sign-In Page)"
+            >
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>

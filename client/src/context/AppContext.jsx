@@ -61,6 +61,12 @@ export function AppProvider({ children }) {
 
   // Load User Data & Application State
   const loadUserData = useCallback(async () => {
+    const token = api.getAuthToken();
+    if (!token) {
+      setCurrentUser(null);
+      return;
+    }
+
     try {
       const [user, usersList, netRes] = await Promise.all([
         api.fetchCurrentUser().catch(() => null),
@@ -79,7 +85,13 @@ export function AppProvider({ children }) {
         if (user.theme) {
           setTheme(user.theme);
         }
+      } else {
+        // Token was invalid, clear it
+        api.logoutUser();
+        setCurrentUser(null);
+        return;
       }
+
       if (usersList) setAvailableUsers(usersList);
       if (netRes) setNetworkInfo(netRes);
 
@@ -256,6 +268,24 @@ export function AppProvider({ children }) {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'AUTH', token: user.token }));
     }
+  };
+
+  const loginGoogle = async (email, name, exam) => {
+    const user = await api.loginWithGoogle(email, name, exam);
+    setCurrentUser(user);
+    if (user.theme) setTheme(user.theme);
+    await loadUserData();
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'AUTH', token: user.token }));
+    }
+  };
+
+  const logout = () => {
+    api.logoutUser();
+    setCurrentUser(null);
+    setTargets([]);
+    setSessions([]);
+    setAnalytics(null);
   };
 
   const register = async (username, name, password, exam) => {
@@ -490,6 +520,8 @@ export function AppProvider({ children }) {
         isAuthModalOpen,
         setIsAuthModalOpen,
         login,
+        loginGoogle,
+        logout,
         register,
         switchProfile,
         switchExam,

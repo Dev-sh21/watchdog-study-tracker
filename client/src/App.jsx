@@ -11,9 +11,15 @@ import SettingsModal from './components/SettingsModal';
 import MobileBottomNav from './components/MobileBottomNav';
 import CompletionToast from './components/CompletionToast';
 import AuthModal from './components/AuthModal';
+import AuthLandingPage from './components/AuthLandingPage';
 
 function MainLayout() {
-  const { activeTab, isAuthModalOpen, setIsAuthModalOpen } = useApp();
+  const { currentUser, activeTab, isAuthModalOpen, setIsAuthModalOpen } = useApp();
+
+  // If not logged in, show the dedicated Sign-In / Sign-Up Landing Page first!
+  if (!currentUser) {
+    return <AuthLandingPage />;
+  }
 
   return (
     <div className="min-h-screen flex flex-col font-sans transition-colors duration-200">
