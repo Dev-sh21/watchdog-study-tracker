@@ -17,8 +17,11 @@ export default function PhoneSyncModal() {
 
   if (!isPhoneModalOpen) return null;
 
-  // Compute mobile URL
-  const phoneUrl = networkInfo?.clientUrl || `http://${window.location.hostname}:3000`;
+  // Compute mobile URL (if on hosted public domain, use origin; else fallback to networkInfo)
+  const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+  const phoneUrl = !isLocal
+    ? window.location.origin
+    : (networkInfo?.clientUrl || `http://${window.location.hostname}:5050`);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(phoneUrl);

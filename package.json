@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "node scripts/start-dev.js",
     "start": "node server/server.js",
-    "build": "cd client && npm run build"
+    "build": "cd client && npm run build",
+    "tunnel": "cloudflared tunnel --url http://localhost:5050",
+    "host": "npm run build && node server/server.js"
   },
   "keywords": [
     "gate",
