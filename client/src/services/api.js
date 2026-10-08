@@ -115,6 +115,45 @@ export async function updateUserTheme(theme) {
   return res.json();
 }
 
+// ================= STUDY PARTNER / BROTHER PROGRESS =================
+export async function fetchPartnerProgress() {
+  const res = await fetch(`${API_BASE}/partner/progress`, { headers: getHeaders() });
+  if (!res.ok) return { partner: null };
+  return res.json();
+}
+
+export async function sendPartnerNudge(message) {
+  const res = await fetch(`${API_BASE}/partner/nudge`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ message })
+  });
+  return res.json();
+}
+
+// ================= GEMINI AI ASSISTANT =================
+export async function askGeminiAi(prompt, apiKey) {
+  const res = await fetch(`${API_BASE}/ai/ask`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ prompt, apiKey })
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || 'Failed to call Gemini AI');
+  }
+  return res.json();
+}
+
+export async function saveGeminiApiKey(apiKey) {
+  const res = await fetch(`${API_BASE}/auth/api-key`, {
+    method: 'PATCH',
+    headers: getHeaders(),
+    body: JSON.stringify({ gemini_api_key: apiKey })
+  });
+  return res.json();
+}
+
 export function getBackupDownloadUrl() {
   const token = getAuthToken();
   return `${API_BASE}/backup/export?token=${token}`;

@@ -788,6 +788,217 @@ app.put('/api/settings', authMiddleware, (req, res) => {
   });
 });
 
+// ======================== STUDY PARTNER (BHAI'S PROGRESS) ========================
+
+app.get('/api/partner/progress', authMiddleware, (req, res) => {
+  const currentUserId = req.user.id;
+
+  // If Devesh (1), partner is Sarvesh (2). If Sarvesh (2), partner is Devesh (1). Otherwise pick the other user.
+  let partnerId = currentUserId === 1 ? 2 : 1;
+  let partner = db.prepare('SELECT id, username, name, selected_exam, exam_name, exam_date, daily_goal_hours, theme FROM users WHERE id = ?').get(partnerId);
+
+  if (!partner) {
+    partner = db.prepare('SELECT id, username, name, selected_exam, exam_name, exam_date, daily_goal_hours, theme FROM users WHERE id != ? LIMIT 1').get(currentUserId);
+  }
+
+  if (!partner) {
+    return res.json({ partner: null });
+  }
+
+  partnerId = partner.id;
+
+  // Partner live timer status
+  const timerRow = db.prepare('SELECT * FROM user_timer WHERE user_id = ?').get(partnerId);
+  const liveTimer = parseTimer(timerRow);
+
+  // Partner today's study seconds
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStats = db.prepare(`
+    SELECT COALESCE(SUM(duration_seconds), 0) as total_seconds, COUNT(*) as count
+    FROM sessions
+    WHERE user_id = ? AND date(created_at) = ?
+  `).get(partnerId, todayStr);
+  const todaySeconds = (todayStats ? todayStats.total_seconds : 0) + (liveTimer.is_running ? liveTimer.elapsed_seconds : 0);
+
+  // Partner weekly total seconds
+  const now = new Date();
+  const dayOfWeek = (now.getDay() + 6) % 7;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - dayOfWeek);
+  monday.setHours(0, 0, 0, 0);
+  const mondayStr = monday.toISOString().split('T')[0];
+
+  const weeklyStats = db.prepare(`
+    SELECT COALESCE(SUM(duration_seconds), 0) as total_seconds
+    FROM sessions
+    WHERE user_id = ? AND date(created_at) >= ?
+  `).get(partnerId, mondayStr);
+  const weeklySeconds = (weeklyStats ? weeklyStats.total_seconds : 0) + (liveTimer.is_running ? liveTimer.elapsed_seconds : 0);
+
+  // Partner streak
+  const distinctDates = db.prepare(`
+    SELECT DISTINCT date(created_at) as study_date
+    FROM sessions
+    WHERE user_id = ?
+    ORDER BY study_date DESC
+  `).all(partnerId).map(r => r.study_date);
+
+  let currentStreak = 0;
+  let checkDate = new Date(now);
+  if (!distinctDates.includes(todayStr)) {
+    checkDate.setDate(checkDate.getDate() - 1);
+  }
+  while (true) {
+    const formatted = checkDate.toISOString().split('T')[0];
+    if (distinctDates.includes(formatted)) {
+      currentStreak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+
+  // Partner completed targets (last 5)
+  const recentCompleted = db.prepare(`
+    SELECT id, title, subject, actual_seconds, completed_at
+    FROM targets
+    WHERE user_id = ? AND status = 'completed'
+    ORDER BY id DESC
+    LIMIT 5
+  `).all(partnerId);
+
+  // Partner pending targets count
+  const pendingCount = db.prepare(`
+    SELECT COUNT(*) as count
+    FROM targets
+    WHERE user_id = ? AND status != 'completed'
+  `).get(partnerId).count;
+
+  // Partner active targets
+  const activeTargets = db.prepare(`
+    SELECT id, title, subject, actual_seconds, status
+    FROM targets
+    WHERE user_id = ? AND status != 'completed'
+    ORDER BY id DESC
+    LIMIT 4
+  `).all(partnerId);
+
+  // Nudges between them
+  const nudges = db.prepare(`
+    SELECT n.*, u.name as from_name
+    FROM partner_nudges n
+    JOIN users u ON n.from_user_id = u.id
+    WHERE (n.from_user_id = ? AND n.to_user_id = ?) OR (n.from_user_id = ? AND n.to_user_id = ?)
+    ORDER BY n.id DESC
+    LIMIT 6
+  `).all(currentUserId, partnerId, partnerId, currentUserId);
+
+  res.json({
+    partner: {
+      ...partner,
+      todaySeconds,
+      todayHours: Number((todaySeconds / 3600).toFixed(2)),
+      weeklySeconds,
+      weeklyHours: Number((weeklySeconds / 3600).toFixed(2)),
+      currentStreak,
+      liveTimer: {
+        is_running: liveTimer.is_running,
+        elapsed_seconds: liveTimer.elapsed_seconds,
+        active_subject: liveTimer.active_subject
+      },
+      recentCompleted,
+      pendingCount,
+      activeTargets,
+      nudges
+    }
+  });
+});
+
+app.post('/api/partner/nudge', authMiddleware, (req, res) => {
+  const currentUserId = req.user.id;
+  const partnerId = currentUserId === 1 ? 2 : 1;
+  const { message } = req.body;
+
+  if (!message || !message.trim()) {
+    return res.status(400).json({ error: 'Message is required' });
+  }
+
+  const result = db.prepare(`
+    INSERT INTO partner_nudges (from_user_id, to_user_id, message)
+    VALUES (?, ?, ?)
+  `).run(currentUserId, partnerId, message.trim());
+
+  const nudge = db.prepare(`
+    SELECT n.*, u.name as from_name
+    FROM partner_nudges n
+    JOIN users u ON n.from_user_id = u.id
+    WHERE n.id = ?
+  `).get(result.lastInsertRowid);
+
+  broadcastToUser(partnerId, 'PARTNER_NUDGE', nudge);
+  res.status(201).json(nudge);
+});
+
+// ======================== GEMINI AI STUDY ASSISTANT ========================
+
+app.post('/api/ai/ask', authMiddleware, async (req, res) => {
+  const { prompt, apiKey } = req.body;
+  if (!prompt || !prompt.trim()) {
+    return res.status(400).json({ error: 'Prompt is required' });
+  }
+
+  const key = apiKey || req.user.gemini_api_key || process.env.GEMINI_API_KEY;
+  if (!key) {
+    return res.status(400).json({
+      error: 'Gemini API Key missing. Please provide your API key in Settings or input box.'
+    });
+  }
+
+  // Save key to user if newly provided
+  if (apiKey && apiKey !== req.user.gemini_api_key) {
+    db.prepare('UPDATE users SET gemini_api_key = ? WHERE id = ?').run(apiKey.trim(), req.user.id);
+  }
+
+  const systemInstruction = `You are an elite, encouraging AI Study Mentor & Strategist for ${req.user.exam_name} in India.
+User: ${req.user.name}.
+Target Exam: ${req.user.exam_name} (${req.user.selected_exam}).
+Daily Goal: ${req.user.daily_goal_hours} hours.
+Give actionable, sharp, concise, practical advice, formula mnemonics, or customized study timetables. Format using clean markdown.`;
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key.trim()}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: `${systemInstruction}\n\nStudent Query: ${prompt}` }]
+          }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      const errData = await response.text();
+      return res.status(500).json({ error: `Gemini API error: ${errData}` });
+    }
+
+    const data = await response.json();
+    const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated.';
+    res.json({ text: replyText });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to call Gemini API' });
+  }
+});
+
+app.patch('/api/auth/api-key', authMiddleware, (req, res) => {
+  const { gemini_api_key } = req.body;
+  db.prepare('UPDATE users SET gemini_api_key = ? WHERE id = ?').run(gemini_api_key || '', req.user.id);
+  res.json({ success: true });
+});
+
 // Fallback SPA routing
 app.use((req, res) => {
   if (req.path.startsWith('/api')) {

@@ -131,12 +131,21 @@ db.exec(`
     content TEXT DEFAULT '',
     updated_at TEXT DEFAULT (datetime('now', 'localtime'))
   );
+
+  CREATE TABLE IF NOT EXISTS partner_nudges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_user_id INTEGER NOT NULL,
+    to_user_id INTEGER NOT NULL,
+    message TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now', 'localtime'))
+  );
 `);
 
-// Ensure user_id column exists on existing targets & sessions
+// Ensure columns exist on existing tables
 ensureColumn('targets', 'user_id', 'INTEGER DEFAULT 1');
 ensureColumn('sessions', 'user_id', 'INTEGER DEFAULT 1');
 ensureColumn('users', 'theme', "TEXT DEFAULT 'dark'");
+ensureColumn('users', 'gemini_api_key', "TEXT DEFAULT ''");
 
 // Seed Users if none exist
 const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
@@ -167,8 +176,8 @@ if (userCount === 0) {
   const pass2 = hashPassword('123456');
   const token2 = crypto.randomBytes(24).toString('hex');
   insertUser.run({
-    username: 'bhai',
-    name: 'Bhai (UPSC Aspirant)',
+    username: 'sarvesh',
+    name: 'Sarvesh Mishra',
     password_hash: pass2.hash,
     salt: pass2.salt,
     selected_exam: 'UPSC',

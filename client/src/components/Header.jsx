@@ -19,7 +19,8 @@ import {
   Landmark,
   ChevronDown,
   Calendar,
-  LogOut
+  LogOut,
+  Bot
 } from 'lucide-react';
 
 export default function Header() {
@@ -42,11 +43,15 @@ export default function Header() {
   const [showExamDropdown, setShowExamDropdown] = useState(false);
   const daysInfo = getDaysRemaining(settings.exam_date);
 
+  const partnerName = currentUser?.id === 1 ? 'Sarvesh' : 'Devesh';
+
   const tabs = [
-    { id: 'timer', label: 'Stopwatch & Clock', icon: Timer },
+    { id: 'timer', label: 'Stopwatch & Focus', icon: Timer },
+    { id: 'partner', label: `${partnerName}'s Progress 👥`, icon: Users },
     { id: 'targets', label: 'Targets & Goals', icon: CheckSquare },
-    { id: 'analytics', label: 'Weekly Analytics', icon: BarChart3 },
-    { id: 'notepad', label: 'Quick Notes', icon: FileText },
+    { id: 'analytics', label: 'Weekly Stats', icon: BarChart3 },
+    { id: 'ai', label: 'Gemini AI', icon: Bot },
+    { id: 'notepad', label: 'Notes', icon: FileText },
     { id: 'history', label: 'History', icon: History }
   ];
 
