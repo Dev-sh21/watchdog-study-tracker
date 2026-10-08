@@ -435,16 +435,16 @@ app.get('/api/targets', authMiddleware, (req, res) => {
 });
 
 app.post('/api/targets', authMiddleware, (req, res) => {
-  const { title, subject, target_date = null } = req.body;
+  const { title, subject, target_date = null, google_event_id = '', gemini_tip = '' } = req.body;
   if (!title || !title.trim()) {
     return res.status(400).json({ error: 'Title is required' });
   }
 
   const finalSubject = subject || req.user.subjects[0] || 'General';
   const result = db.prepare(`
-    INSERT INTO targets (user_id, title, subject, target_date, status, actual_seconds)
-    VALUES (?, ?, ?, ?, 'todo', 0)
-  `).run(req.user.id, title.trim(), finalSubject, target_date);
+    INSERT INTO targets (user_id, title, subject, target_date, status, actual_seconds, google_event_id, gemini_tip)
+    VALUES (?, ?, ?, ?, 'todo', 0, ?, ?)
+  `).run(req.user.id, title.trim(), finalSubject, target_date, google_event_id || '', gemini_tip || '');
 
   const newTarget = db.prepare('SELECT * FROM targets WHERE id = ?').get(result.lastInsertRowid);
   broadcastToUser(req.user.id, 'TARGET_CREATED', newTarget);
@@ -463,14 +463,16 @@ app.patch('/api/targets/:id', authMiddleware, (req, res) => {
     status = target.status,
     actual_seconds = target.actual_seconds,
     started_at = target.started_at,
-    completed_at = target.completed_at
+    completed_at = target.completed_at,
+    google_event_id = target.google_event_id,
+    gemini_tip = target.gemini_tip
   } = req.body;
 
   db.prepare(`
     UPDATE targets
-    SET title = ?, subject = ?, target_date = ?, status = ?, actual_seconds = ?, started_at = ?, completed_at = ?
+    SET title = ?, subject = ?, target_date = ?, status = ?, actual_seconds = ?, started_at = ?, completed_at = ?, google_event_id = ?, gemini_tip = ?
     WHERE id = ? AND user_id = ?
-  `).run(title, subject, target_date, status, actual_seconds, started_at, completed_at, id, req.user.id);
+  `).run(title, subject, target_date, status, actual_seconds, started_at, completed_at, google_event_id, gemini_tip, id, req.user.id);
 
   const updated = db.prepare('SELECT * FROM targets WHERE id = ?').get(id);
   broadcastToUser(req.user.id, 'TARGET_UPDATED', updated);
@@ -529,9 +531,10 @@ app.post('/api/targets/:id/toggle', authMiddleware, (req, res) => {
 
 app.delete('/api/targets/:id', authMiddleware, (req, res) => {
   const { id } = req.params;
+  const target = db.prepare('SELECT * FROM targets WHERE id = ? AND user_id = ?').get(id, req.user.id);
   db.prepare('DELETE FROM targets WHERE id = ? AND user_id = ?').run(id, req.user.id);
-  broadcastToUser(req.user.id, 'TARGET_DELETED', { id: Number(id) });
-  res.json({ success: true, id: Number(id) });
+  broadcastToUser(req.user.id, 'TARGET_DELETED', { id: Number(id), google_event_id: target ? target.google_event_id : '' });
+  res.json({ success: true, id: Number(id), google_event_id: target ? target.google_event_id : '' });
 });
 
 // ======================== SESSIONS ROUTES (USER-SCOPED) ========================
@@ -997,6 +1000,104 @@ app.patch('/api/auth/api-key', authMiddleware, (req, res) => {
   const { gemini_api_key } = req.body;
   db.prepare('UPDATE users SET gemini_api_key = ? WHERE id = ?').run(gemini_api_key || '', req.user.id);
   res.json({ success: true });
+});
+
+app.patch('/api/auth/google-calendar-token', authMiddleware, (req, res) => {
+  const { token } = req.body;
+  db.prepare('UPDATE users SET google_calendar_token = ? WHERE id = ?').run(token || '', req.user.id);
+  res.json({ success: true });
+});
+
+// Smart AI Target Parser & Scheduler using Gemini
+app.post('/api/ai/parse-target', authMiddleware, async (req, res) => {
+  const { prompt, apiKey } = req.body;
+  if (!prompt || !prompt.trim()) {
+    return res.status(400).json({ error: 'Prompt is required' });
+  }
+
+  const key = apiKey || req.user.gemini_api_key || process.env.GEMINI_API_KEY;
+  const todayStr = new Date().toISOString().split('T')[0];
+  const userSubjects = req.user.subjects || [];
+
+  const fallback = () => {
+    const lower = prompt.toLowerCase();
+    let matchedSubject = userSubjects[0] || 'General';
+    for (const sub of userSubjects) {
+      if (lower.includes(sub.toLowerCase()) || sub.toLowerCase().split(' ').some(w => w.length > 3 && lower.includes(w))) {
+        matchedSubject = sub;
+        break;
+      }
+    }
+    let dur = 120;
+    if (lower.includes('1 hr') || lower.includes('1 hour') || lower.includes('60 min')) dur = 60;
+    else if (lower.includes('3 hr') || lower.includes('3 hour') || lower.includes('180 min')) dur = 180;
+    else if (lower.includes('30 min') || lower.includes('quick')) dur = 45;
+
+    return {
+      title: prompt.trim(),
+      subject: matchedSubject,
+      target_date: todayStr,
+      time_str: '10:00',
+      duration_minutes: dur,
+      exam_tip: `High-yield topic for ${req.user.selected_exam}! Focus on previous year questions & error log.`
+    };
+  };
+
+  if (!key) {
+    return res.json(fallback());
+  }
+
+  try {
+    const promptText = `You are an elite study strategist for ${req.user.exam_name} (${req.user.selected_exam}).
+Available subjects: ${JSON.stringify(userSubjects)}.
+Today's date: ${todayStr}.
+
+The student wants to schedule this study target: "${prompt}"
+
+Return ONLY a valid JSON object (no markdown, no backticks, just raw JSON) matching:
+{
+  "title": "Clear, concise study goal title",
+  "subject": "Exactly one subject from the available subjects list that best fits",
+  "target_date": "YYYY-MM-DD",
+  "time_str": "HH:MM (24-hour format)",
+  "duration_minutes": 120,
+  "exam_tip": "One concise, high-yield tip for this topic in ${req.user.selected_exam}"
+}`;
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key.trim()}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: promptText }] }],
+        generationConfig: { responseMimeType: "application/json" }
+      })
+    });
+
+    if (!response.ok) {
+      console.warn('Gemini target parse returned non-ok, using fallback');
+      return res.json(fallback());
+    }
+
+    const data = await response.json();
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (rawText) {
+      const cleanJson = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(cleanJson);
+      return res.json({
+        title: parsed.title || prompt.trim(),
+        subject: userSubjects.includes(parsed.subject) ? parsed.subject : (userSubjects[0] || 'General'),
+        target_date: parsed.target_date || todayStr,
+        time_str: parsed.time_str || '10:00',
+        duration_minutes: Number(parsed.duration_minutes) || 120,
+        exam_tip: parsed.exam_tip || fallback().exam_tip
+      });
+    }
+    return res.json(fallback());
+  } catch (err) {
+    console.error('Gemini parse error:', err);
+    return res.json(fallback());
+  }
 });
 
 // Fallback SPA routing

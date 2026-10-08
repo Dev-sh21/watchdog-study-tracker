@@ -143,9 +143,12 @@ db.exec(`
 
 // Ensure columns exist on existing tables
 ensureColumn('targets', 'user_id', 'INTEGER DEFAULT 1');
+ensureColumn('targets', 'google_event_id', "TEXT DEFAULT ''");
+ensureColumn('targets', 'gemini_tip', "TEXT DEFAULT ''");
 ensureColumn('sessions', 'user_id', 'INTEGER DEFAULT 1');
-ensureColumn('users', 'theme', "TEXT DEFAULT 'dark'");
+ensureColumn('users', 'theme', "TEXT DEFAULT 'yellow'");
 ensureColumn('users', 'gemini_api_key', "TEXT DEFAULT ''");
+ensureColumn('users', 'google_calendar_token', "TEXT DEFAULT ''");
 
 // Seed Users if none exist
 const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;

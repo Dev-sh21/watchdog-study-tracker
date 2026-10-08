@@ -145,6 +145,28 @@ export async function askGeminiAi(prompt, apiKey) {
   return res.json();
 }
 
+export async function parseTargetWithGemini(prompt, apiKey) {
+  const res = await fetch(`${API_BASE}/ai/parse-target`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ prompt, apiKey })
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || 'Failed to parse target with Gemini');
+  }
+  return res.json();
+}
+
+export async function saveGoogleCalendarToken(token) {
+  const res = await fetch(`${API_BASE}/auth/google-calendar-token`, {
+    method: 'PATCH',
+    headers: getHeaders(),
+    body: JSON.stringify({ token })
+  });
+  return res.json();
+}
+
 export async function saveGeminiApiKey(apiKey) {
   const res = await fetch(`${API_BASE}/auth/api-key`, {
     method: 'PATCH',

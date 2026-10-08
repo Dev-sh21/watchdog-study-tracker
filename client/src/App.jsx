@@ -35,8 +35,8 @@ function MainLayout() {
       </main>
 
       {/* Clean, unobtrusive footer */}
-      <footer className="border-t border-slate-800/80 py-4 text-center text-xs text-slate-500">
-        <p>WatchDog • Distraction-free Study Cockpit • Progress automatically saved to SQLite Database</p>
+      <footer className="border-t border-yellow-200/90 py-5 text-center text-xs text-amber-900/70 font-medium">
+        <p>WatchDog • Powered by Gemini AI & Google Calendar • Automatically Saved in SQLite Database</p>
       </footer>
     </div>
   );

@@ -1,22 +1,29 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatDurationHuman } from '../utils/timeFormat';
-import { createGoogleCalendarUrl, downloadIcsFile } from '../utils/calendar';
 import {
-  CheckSquare,
-  Square,
-  Plus,
-  Play,
-  Trash2,
-  Clock,
+  parseTargetWithGemini,
+  saveGeminiApiKey
+} from '../services/api';
+import {
+  syncAddGoogleEvent,
+  syncCompleteGoogleEvent,
+  syncDeleteGoogleEvent,
+  setGoogleToken,
+  getGoogleToken
+} from '../services/googleCalendar';
+import {
   CheckCircle2,
-  Calendar,
+  Circle,
   Sparkles,
-  ListTodo,
-  TrendingUp,
+  Calendar,
+  Trash2,
+  Play,
+  Clock,
+  Key,
   ExternalLink,
-  Download,
-  CalendarPlus
+  ChevronRight,
+  ListTodo
 } from 'lucide-react';
 
 export default function TargetNotepad() {
@@ -24,240 +31,209 @@ export default function TargetNotepad() {
     targets,
     settings,
     timer,
+    currentUser,
     handleCreateTarget,
     handleToggleTarget,
     handleDeleteTarget,
     handleStartTargetFocus
   } = useApp();
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const [promptInput, setPromptInput] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [geminiKeyInput, setGeminiKeyInput] = useState(currentUser?.gemini_api_key || '');
+  const [googleTokenInput, setGoogleTokenInput] = useState(getGoogleToken());
+  const [filter, setFilter] = useState('all'); // 'all', 'pending', 'completed'
 
-  const [newTitle, setNewTitle] = useState('');
-  const [newSubject, setNewSubject] = useState(settings.subjects?.[0] || 'General');
-  const [targetDate, setTargetDate] = useState(todayStr);
-  const [targetTime, setTargetTime] = useState('10:00');
-  const [durationMinutes, setDurationMinutes] = useState('120');
-  const [syncToGoogleCal, setSyncToGoogleCal] = useState(false);
-  const [filter, setFilter] = useState('all'); // 'all', 'active', 'completed'
-
-  const handleSubmit = async (e) => {
+  // Smart Add with Gemini & Google Calendar Auto-Sync
+  const handleAddSmartTarget = async (e) => {
     e.preventDefault();
-    if (!newTitle.trim()) return;
+    if (!promptInput.trim() || isProcessing) return;
 
-    await handleCreateTarget(newTitle.trim(), newSubject, targetDate);
+    setIsProcessing(true);
+    const rawText = promptInput.trim();
 
-    // If Google Calendar sync requested, open event in new tab
-    if (syncToGoogleCal) {
-      const gcalUrl = createGoogleCalendarUrl({
-        title: newTitle.trim(),
-        subject: newSubject,
-        examName: settings.exam_name || 'GATE',
-        dateStr: targetDate,
-        timeStr: targetTime,
-        durationMinutes: Number(durationMinutes)
-      });
-      window.open(gcalUrl, '_blank', 'noopener,noreferrer');
+    try {
+      // 1. Ask Gemini to parse the study target
+      let parsed = {
+        title: rawText,
+        subject: settings.subjects?.[0] || 'General',
+        target_date: new Date().toISOString().split('T')[0],
+        time_str: '10:00',
+        duration_minutes: 120,
+        exam_tip: 'Focus on core concepts & previous year questions!'
+      };
+
+      try {
+        const aiResult = await parseTargetWithGemini(rawText, geminiKeyInput);
+        if (aiResult && aiResult.title) {
+          parsed = aiResult;
+        }
+      } catch (aiErr) {
+        console.warn('AI parse error, using fallback:', aiErr);
+      }
+
+      // 2. Automatically sync & add to Google Calendar
+      let googleEventId = '';
+      try {
+        const calResult = await syncAddGoogleEvent({
+          title: parsed.title,
+          subject: parsed.subject,
+          examName: settings.exam_name || 'GATE',
+          dateStr: parsed.target_date,
+          timeStr: parsed.time_str,
+          durationMinutes: parsed.duration_minutes,
+          tip: parsed.exam_tip
+        });
+        if (calResult && calResult.eventId) {
+          googleEventId = calResult.eventId;
+        }
+      } catch (calErr) {
+        console.warn('Google Calendar sync warning:', calErr);
+      }
+
+      // 3. Save target to SQLite database with Google Event ID & Gemini Tip
+      await handleCreateTarget(
+        parsed.title,
+        parsed.subject,
+        parsed.target_date,
+        googleEventId,
+        parsed.exam_tip
+      );
+
+      setPromptInput('');
+    } catch (err) {
+      console.error('Failed to create target:', err);
+    } finally {
+      setIsProcessing(false);
     }
-
-    setNewTitle('');
   };
 
-  const handleOpenGoogleCalendar = (target) => {
-    const gcalUrl = createGoogleCalendarUrl({
-      title: target.title,
-      subject: target.subject,
-      examName: settings.exam_name || 'GATE',
-      dateStr: target.target_date || todayStr,
-      timeStr: '10:00',
-      durationMinutes: 120
-    });
-    window.open(gcalUrl, '_blank', 'noopener,noreferrer');
+  // Toggle Complete / Cut Task (Syncs & strikes out in Google Calendar)
+  const onToggle = async (target) => {
+    const isNowCompleted = target.status !== 'completed';
+    await handleToggleTarget(target.id);
+
+    // Sync with Google Calendar if event ID is attached
+    if (target.google_event_id) {
+      if (isNowCompleted) {
+        await syncCompleteGoogleEvent(
+          target.google_event_id,
+          target.title,
+          formatDurationHuman(target.actual_seconds || 0)
+        );
+      }
+    }
   };
 
-  const handleDownloadIcs = (target) => {
-    downloadIcsFile({
-      title: target.title,
-      subject: target.subject,
-      examName: settings.exam_name || 'GATE',
-      dateStr: target.target_date || todayStr,
-      timeStr: '10:00',
-      durationMinutes: 120
-    });
+  // Delete / Cut Task (Deletes from DB and cuts from Google Calendar)
+  const onDelete = async (target) => {
+    // Cut/delete from Google Calendar automatically
+    if (target.google_event_id) {
+      await syncDeleteGoogleEvent(target.google_event_id);
+    }
+    await handleDeleteTarget(target.id);
   };
 
-  const activeTargets = targets.filter((t) => t.status !== 'completed');
+  const pendingTargets = targets.filter((t) => t.status !== 'completed');
   const completedTargets = targets.filter((t) => t.status === 'completed');
 
   const filteredTargets =
-    filter === 'active'
-      ? activeTargets
+    filter === 'pending'
+      ? pendingTargets
       : filter === 'completed'
       ? completedTargets
       : targets;
 
-  const totalActualSeconds = targets.reduce((acc, t) => acc + (t.actual_seconds || 0), 0);
-  const completionRate = targets.length > 0 ? Math.round((completedTargets.length / targets.length) * 100) : 0;
+  const handleSaveKeys = async () => {
+    if (geminiKeyInput.trim()) {
+      await saveGeminiApiKey(geminiKeyInput.trim()).catch(console.error);
+    }
+    setGoogleToken(googleTokenInput.trim());
+    setShowKeyModal(false);
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="bg-white border border-yellow-200/90 rounded-3xl p-6 sm:p-8 shadow-sm shadow-amber-500/5 space-y-6">
       
-      {/* Target Progress & Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
-          <div>
-            <span className="text-xs font-medium text-slate-400">Total Goals</span>
-            <div className="text-2xl font-bold text-white mt-0.5">{targets.length}</div>
+      {/* Header: Title & AI / Calendar Config */}
+      <div className="flex items-center justify-between pb-3 border-b border-yellow-100">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center">
+            <ListTodo className="w-4 h-4" />
           </div>
-          <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
-            <ListTodo className="w-5 h-5" />
+          <div>
+            <h3 className="text-base font-bold text-slate-900 leading-tight">
+              Study Targets & Todo List
+            </h3>
+            <p className="text-[11px] text-amber-800 font-medium">
+              Gemini AI Auto-Schedules & Syncs with Google Calendar 📅
+            </p>
           </div>
         </div>
 
-        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
-          <div>
-            <span className="text-xs font-medium text-slate-400">Completed Goals</span>
-            <div className="text-2xl font-bold text-emerald-400 mt-0.5">
-              {completedTargets.length} <span className="text-xs text-slate-400 font-normal">({completionRate}%)</span>
-            </div>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
-          <div>
-            <span className="text-xs font-medium text-slate-400">Total Goal Time</span>
-            <div className="text-2xl font-bold text-purple-400 mt-0.5">
-              {formatDurationHuman(totalActualSeconds)}
-            </div>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
-            <TrendingUp className="w-5 h-5" />
-          </div>
-        </div>
+        {/* API Key / Token Config Button */}
+        <button
+          onClick={() => setShowKeyModal(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-yellow-50 hover:bg-yellow-100 border border-yellow-200 text-amber-900 text-xs font-bold transition cursor-pointer"
+          title="Configure Gemini API Key & Google Calendar Token"
+        >
+          <Key className="w-3.5 h-3.5 text-amber-600" />
+          <span className="hidden sm:inline">AI & Sync Keys</span>
+        </button>
       </div>
 
-      {/* Target Creator Form with Google Calendar Options */}
-      <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 backdrop-blur-sm space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-indigo-400" />
-            <span>Add Study Target & Sync with Google Calendar</span>
-          </h3>
+      {/* Target Input with Gemini AI Auto-Schedule */}
+      <form onSubmit={handleAddSmartTarget} className="space-y-3">
+        <div className="flex flex-col sm:flex-row gap-2.5">
+          <input
+            type="text"
+            placeholder="e.g. Revise Algorithms DP, Solve 20 PYQs, or Laxmikanth Ch 5..."
+            value={promptInput}
+            onChange={(e) => setPromptInput(e.target.value)}
+            disabled={isProcessing}
+            className="flex-1 bg-yellow-50/60 focus:bg-white border border-yellow-200 text-slate-900 text-sm font-medium rounded-2xl px-4 py-3 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 transition"
+          />
 
-          <span className="text-[11px] text-indigo-400 font-medium flex items-center gap-1">
-            <CalendarPlus className="w-3.5 h-3.5" />
-            <span>Google Calendar Enabled</span>
-          </span>
+          <button
+            type="submit"
+            disabled={isProcessing || !promptInput.trim()}
+            className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-amber-400 hover:bg-amber-500 disabled:opacity-50 text-slate-950 text-xs sm:text-sm font-black shadow-md shadow-amber-400/25 transition active:scale-95 cursor-pointer whitespace-nowrap"
+          >
+            {isProcessing ? (
+              <>
+                <Sparkles className="w-4 h-4 animate-spin text-slate-900" />
+                <span>Scheduling with Gemini...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4 fill-current" />
+                <span>Gemini + Calendar</span>
+              </>
+            )}
+          </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
-          {/* Title & Subject */}
-          <div className="flex flex-col sm:flex-row gap-3">
-            <input
-              type="text"
-              placeholder="e.g. Solve 30 PYQs from Algorithms, or Polity Laxmikanth Ch 7-10..."
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              required
-              className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-
-            <select
-              value={newSubject}
-              onChange={(e) => setNewSubject(e.target.value)}
-              className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer sm:w-60"
-            >
-              {settings.subjects?.map((sub) => (
-                <option key={sub} value={sub}>
-                  {sub}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Date, Time, Duration & Google Calendar Checkbox */}
-          <div className="flex flex-wrap items-center gap-3 text-xs bg-slate-950/40 p-3 rounded-xl border border-slate-800">
-            {/* Target Date */}
-            <div className="flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5 text-slate-400" />
-              <label className="text-slate-400">Date:</label>
-              <input
-                type="date"
-                value={targetDate}
-                onChange={(e) => setTargetDate(e.target.value)}
-                className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none"
-              />
-            </div>
-
-            {/* Target Time */}
-            <div className="flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-slate-400" />
-              <label className="text-slate-400">Time:</label>
-              <input
-                type="time"
-                value={targetTime}
-                onChange={(e) => setTargetTime(e.target.value)}
-                className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none"
-              />
-            </div>
-
-            {/* Duration */}
-            <div className="flex items-center gap-1.5">
-              <label className="text-slate-400">Duration:</label>
-              <select
-                value={durationMinutes}
-                onChange={(e) => setDurationMinutes(e.target.value)}
-                className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none cursor-pointer"
-              >
-                <option value="60">1 Hour</option>
-                <option value="90">1.5 Hours</option>
-                <option value="120">2 Hours</option>
-                <option value="180">3 Hours</option>
-                <option value="240">4 Hours</option>
-              </select>
-            </div>
-
-            {/* Checkbox: Auto-Open Google Calendar */}
-            <label className="flex items-center gap-2 cursor-pointer ml-auto text-slate-300 font-medium">
-              <input
-                type="checkbox"
-                checked={syncToGoogleCal}
-                onChange={(e) => setSyncToGoogleCal(e.target.checked)}
-                className="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
-              />
-              <span>Open in Google Calendar 📅</span>
-            </label>
-          </div>
-
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              className="flex items-center justify-center gap-1.5 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold shadow-md shadow-indigo-600/20 transition cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add Target Goal</span>
-            </button>
-          </div>
-        </form>
-      </div>
+        <p className="text-[11px] text-slate-400 px-1">
+          Tip: Gemini will infer the subject, recommend ideal study duration, and sync straight to your Google Calendar!
+        </p>
+      </form>
 
       {/* Filter Tabs */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between pt-1">
+        <div className="flex items-center gap-1.5 bg-yellow-50/80 p-1 rounded-2xl border border-yellow-200">
           {[
             { id: 'all', label: `All (${targets.length})` },
-            { id: 'active', label: `Pending (${activeTargets.length})` },
-            { id: 'completed', label: `Completed (${completedTargets.length})` }
+            { id: 'pending', label: `Pending (${pendingTargets.length})` },
+            { id: 'completed', label: `Done (${completedTargets.length})` }
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setFilter(tab.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+              className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
                 filter === tab.id
-                  ? 'bg-slate-800 text-white border border-slate-700'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-amber-400 text-slate-950 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               {tab.label}
@@ -265,152 +241,129 @@ export default function TargetNotepad() {
           ))}
         </div>
 
-        <span className="text-xs text-slate-500 hidden sm:inline">
-          Tip: Click 📅 on any goal to add it straight to Google Calendar!
+        <span className="text-[11px] text-amber-800 font-bold hidden sm:inline">
+          {pendingTargets.length} task(s) left today
         </span>
       </div>
 
-      {/* Targets List */}
-      <div className="space-y-3">
+      {/* Target Goals List */}
+      <div className="space-y-2.5 max-h-[460px] overflow-y-auto pr-1">
         {filteredTargets.length === 0 ? (
-          <div className="text-center py-12 bg-slate-900/30 rounded-2xl border border-slate-800/50">
-            <CheckSquare className="w-10 h-10 text-slate-600 mx-auto mb-2" />
-            <p className="text-slate-400 text-sm">No targets in this category.</p>
-            <p className="text-slate-500 text-xs mt-1">Add a new goal above to stay ahead in your exam prep!</p>
+          <div className="text-center py-10 bg-yellow-50/30 rounded-3xl border border-yellow-100">
+            <CheckCircle2 className="w-8 h-8 text-amber-300 mx-auto mb-2" />
+            <p className="text-xs font-semibold text-slate-500">No targets here yet!</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Type your goal above and let Gemini schedule it for you.</p>
           </div>
         ) : (
           filteredTargets.map((target) => {
             const isCompleted = target.status === 'completed';
             const isCurrentlyTracking = timer.active_target_id === target.id;
-            const currentAccumulated =
+            const currentSeconds =
               (target.actual_seconds || 0) +
               (isCurrentlyTracking && timer.is_running ? timer.elapsed_seconds : 0);
 
             return (
               <div
                 key={target.id}
-                className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl border transition-all ${
+                className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
                   isCompleted
-                    ? 'bg-slate-900/40 border-slate-800/80 opacity-80'
+                    ? 'bg-slate-50/80 border-slate-200 opacity-75'
                     : isCurrentlyTracking
-                    ? 'bg-indigo-950/20 border-indigo-500/40 shadow-lg shadow-indigo-500/10'
-                    : 'bg-slate-900/70 border-slate-800 hover:border-slate-700'
+                    ? 'bg-amber-50 border-amber-300 shadow-sm shadow-amber-400/10'
+                    : 'bg-white border-yellow-200 hover:border-amber-300 hover:shadow-sm'
                 }`}
               >
-                {/* Left: Checkbox & Info */}
-                <div className="flex items-start gap-3.5 flex-1">
+                {/* Left: Curvy Checkbox & Title */}
+                <div className="flex items-start gap-3 flex-1 min-w-0">
                   <button
-                    onClick={() => handleToggleTarget(target.id)}
-                    className="mt-0.5 text-slate-400 hover:text-emerald-400 transition cursor-pointer flex-shrink-0"
-                    title={isCompleted ? 'Mark as Incomplete' : 'Tick Complete & View Time Spent!'}
+                    onClick={() => onToggle(target)}
+                    className="mt-0.5 text-amber-500 hover:text-emerald-500 transition cursor-pointer flex-shrink-0"
+                    title={isCompleted ? 'Mark as Incomplete' : 'Cut / Complete Task!'}
                   >
                     {isCompleted ? (
-                      <CheckCircle2 className="w-6 h-6 text-emerald-400 fill-emerald-500/20" />
+                      <CheckCircle2 className="w-5 h-5 text-emerald-500 fill-emerald-100" />
                     ) : (
-                      <Square className="w-6 h-6 text-slate-500 hover:text-emerald-400" />
+                      <Circle className="w-5 h-5 text-amber-400 hover:text-emerald-500" />
                     )}
                   </button>
 
-                  <div className="space-y-1.5 flex-1 min-w-0">
+                  <div className="space-y-1 min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p
-                        className={`text-sm font-semibold leading-snug break-words ${
-                          isCompleted ? 'line-through text-slate-400' : 'text-slate-100'
+                        className={`text-sm font-bold leading-tight break-words ${
+                          isCompleted ? 'line-through text-slate-400' : 'text-slate-900'
                         }`}
                       >
                         {target.title}
                       </p>
 
                       {isCurrentlyTracking && (
-                        <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 animate-pulse">
-                          Active in Timer
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950 animate-pulse">
+                          Tracking
                         </span>
                       )}
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700/60 font-medium">
+                    {/* Metadata & AI Tip */}
+                    <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                      <span className="px-2 py-0.5 rounded-lg bg-yellow-100 text-amber-900 font-bold text-[10px]">
                         {target.subject}
                       </span>
 
-                      {/* Target Date */}
-                      {target.target_date && (
-                        <span className="flex items-center gap-1 text-slate-400">
-                          <Calendar className="w-3.5 h-3.5 text-indigo-400" />
-                          <span>Target: {target.target_date}</span>
-                        </span>
-                      )}
-
-                      {/* Display exact time taken! */}
-                      {currentAccumulated > 0 && (
-                        <span
-                          className={`flex items-center gap-1 font-semibold ${
-                            isCompleted ? 'text-emerald-400' : 'text-indigo-300'
-                          }`}
-                        >
-                          <Clock className="w-3.5 h-3.5" />
+                      {/* Time taken / duration calculation */}
+                      {currentSeconds > 0 && (
+                        <span className={`font-bold flex items-center gap-1 ${isCompleted ? 'text-emerald-600' : 'text-amber-800'}`}>
+                          <Clock className="w-3 h-3" />
                           <span>
-                            {isCompleted ? 'Finished in: ' : 'Time spent: '}
-                            <strong>{formatDurationHuman(currentAccumulated)}</strong>
+                            {isCompleted ? 'Finished in ' : 'Studied '}
+                            {formatDurationHuman(currentSeconds)}
                           </span>
                         </span>
                       )}
 
-                      {isCompleted && target.completed_at && (
-                        <span className="flex items-center gap-1 text-slate-500 text-[11px]">
-                          <Calendar className="w-3 h-3" />
-                          <span>
-                            Completed on {new Date(target.completed_at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </span>
-                      )}
+                      {/* Google Calendar Link Badge */}
+                      <a
+                        href="https://calendar.google.com/calendar/u/0/r"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-amber-700 hover:underline flex items-center gap-1 font-semibold text-[10px]"
+                        title="View on Google Calendar"
+                      >
+                        <Calendar className="w-3 h-3 text-amber-600" />
+                        <span>Google Cal</span>
+                      </a>
                     </div>
+
+                    {/* Gemini Study Tip (if available) */}
+                    {target.gemini_tip && (
+                      <p className="text-[11px] text-amber-900 font-medium bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-200/60 inline-block mt-1">
+                        💡 <strong>Tip:</strong> {target.gemini_tip}
+                      </p>
+                    )}
                   </div>
                 </div>
 
-                {/* Right: Calendar & Action Buttons */}
-                <div className="flex flex-wrap items-center justify-end gap-2 self-end sm:self-center">
-                  
-                  {/* Google Calendar 1-Click Button */}
-                  <button
-                    onClick={() => handleOpenGoogleCalendar(target)}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-indigo-300 hover:text-indigo-200 text-xs font-medium transition cursor-pointer"
-                    title="Add this goal directly to Google Calendar"
-                  >
-                    <CalendarPlus className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Google Cal</span>
-                    <ExternalLink className="w-2.5 h-2.5 opacity-60" />
-                  </button>
-
-                  {/* iCal / Apple Calendar Download Button */}
-                  <button
-                    onClick={() => handleDownloadIcs(target)}
-                    className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-slate-200 text-xs transition cursor-pointer"
-                    title="Download .ics event file (Apple / Phone Calendar)"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                  </button>
-
-                  {/* Focus study button */}
+                {/* Right: Focus & Delete/Cut Buttons */}
+                <div className="flex items-center gap-2 self-end sm:self-center flex-shrink-0">
                   {!isCompleted && (
                     <button
                       onClick={() => handleStartTargetFocus(target)}
-                      className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                      className={`px-3 py-1.5 rounded-2xl text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
                         isCurrentlyTracking
-                          ? 'bg-indigo-600 text-white shadow-md'
-                          : 'bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/40'
+                          ? 'bg-amber-400 text-slate-950 shadow-sm'
+                          : 'bg-yellow-100 hover:bg-amber-400 text-amber-900 hover:text-slate-950'
                       }`}
-                      title="Link this goal to stopwatch and start studying"
                     >
-                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <Play className="w-3 h-3 fill-current" />
                       <span>{isCurrentlyTracking ? 'Focusing...' : 'Focus'}</span>
                     </button>
                   )}
 
+                  {/* Cut / Delete Button */}
                   <button
-                    onClick={() => handleDeleteTarget(target.id)}
-                    className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition cursor-pointer"
-                    title="Delete target"
+                    onClick={() => onDelete(target)}
+                    className="p-1.5 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition cursor-pointer"
+                    title="Cut task and remove from Google Calendar"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -420,6 +373,72 @@ export default function TargetNotepad() {
           })
         )}
       </div>
+
+      {/* Gemini API Key & Google Calendar Token Modal */}
+      {showKeyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white border border-yellow-300 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">Gemini & Google Calendar Settings</h3>
+                <p className="text-xs text-slate-500">Add your keys for automatic background scheduling</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">
+                  Gemini API Key:
+                </label>
+                <input
+                  type="password"
+                  placeholder="AIzaSy..."
+                  value={geminiKeyInput}
+                  onChange={(e) => setGeminiKeyInput(e.target.value)}
+                  className="w-full bg-yellow-50/50 border border-yellow-200 rounded-2xl p-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+                <span className="text-[10px] text-slate-400">
+                  Free key from Google AI Studio (aistudio.google.com). If empty, smart built-in scheduling is used.
+                </span>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">
+                  Google Calendar OAuth Access Token (Optional):
+                </label>
+                <input
+                  type="password"
+                  placeholder="ya29..."
+                  value={googleTokenInput}
+                  onChange={(e) => setGoogleTokenInput(e.target.value)}
+                  className="w-full bg-yellow-50/50 border border-yellow-200 rounded-2xl p-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+                <span className="text-[10px] text-slate-400">
+                  For silent background sync. If empty, calendar templates open seamlessly on creation.
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setShowKeyModal(false)}
+                className="px-4 py-2 rounded-2xl text-xs font-semibold text-slate-500 hover:bg-slate-100 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveKeys}
+                className="px-5 py-2 rounded-2xl text-xs font-bold bg-amber-400 hover:bg-amber-500 text-slate-950 shadow-md cursor-pointer"
+              >
+                Save Settings ✓
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

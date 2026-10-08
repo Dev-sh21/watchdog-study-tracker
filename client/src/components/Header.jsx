@@ -3,15 +3,15 @@ import { useApp } from '../context/AppContext';
 import { getDaysRemaining } from '../utils/timeFormat';
 import {
   Timer,
-  Sun,
-  Moon,
-  Users,
+  ChevronDown,
+  Check,
+  Calendar,
+  Sparkles,
   GraduationCap,
   Landmark,
-  ChevronDown,
-  Database,
-  Check
+  User
 } from 'lucide-react';
+import { isGoogleCalendarConnected } from '../services/googleCalendar';
 
 export default function Header() {
   const {
@@ -19,10 +19,7 @@ export default function Header() {
     availableUsers,
     switchProfile,
     switchExam,
-    theme,
-    toggleTheme,
-    settings,
-    isConnected
+    settings
   } = useApp();
 
   const [showUserDropdown, setShowUserDropdown] = useState(false);
@@ -30,6 +27,7 @@ export default function Header() {
 
   const daysInfo = getDaysRemaining(settings.exam_date);
   const isUpsc = currentUser?.selected_exam === 'UPSC';
+  const hasGoogleCal = isGoogleCalendarConnected();
 
   const handleSelectExam = async (examType) => {
     setShowExamDropdown(false);
@@ -42,127 +40,116 @@ export default function Header() {
   };
 
   return (
-    <header className="border-b border-slate-800 bg-slate-900/90 backdrop-blur-md sticky top-0 z-30 transition-colors">
+    <header className="border-b border-yellow-200/90 bg-white/90 backdrop-blur-md sticky top-0 z-30 transition-colors shadow-sm shadow-yellow-500/5">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           
-          {/* Left: Brand & Exam Tag */}
+          {/* Left: Curvy Brand Logo & Exam Pill */}
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2.5">
-              <div
-                className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transition-all ${
-                  isUpsc
-                    ? 'bg-gradient-to-br from-amber-500 via-orange-500 to-rose-500 shadow-amber-500/25'
-                    : 'bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shadow-indigo-500/25'
-                }`}
-              >
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-400 to-yellow-300 flex items-center justify-center shadow-md shadow-amber-400/25 transform hover:scale-105 transition-all">
                 {isUpsc ? (
-                  <Landmark className="w-5 h-5 text-white animate-pulse" />
+                  <Landmark className="w-5 h-5 text-slate-900" />
                 ) : (
-                  <Timer className="w-5 h-5 text-white animate-pulse" />
+                  <Timer className="w-5 h-5 text-slate-900" />
                 )}
               </div>
 
               <div>
-                <span className="text-base sm:text-lg font-black tracking-tight text-white block leading-tight">
+                <span className="text-base sm:text-lg font-black tracking-tight text-slate-900 block leading-tight">
                   WatchDog ⏱️
                 </span>
-                <span className="text-[10px] text-slate-400 font-medium">
-                  {currentUser?.selected_exam === 'UPSC' ? 'UPSC Civil Services' : 'GATE Preparation'}
+                <span className="text-[11px] text-amber-700 font-semibold flex items-center gap-1">
+                  <span>{isUpsc ? 'UPSC Civil Services' : 'GATE Prep'}</span>
                 </span>
               </div>
             </div>
 
-            {/* Quick Exam Mode Toggle (GATE <-> UPSC) */}
+            {/* Quick Exam Switcher (Curvy Pill) */}
             <div className="relative">
               <button
                 onClick={() => setShowExamDropdown(!showExamDropdown)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border transition cursor-pointer ${
-                  isUpsc
-                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25'
-                    : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30 hover:bg-indigo-500/25'
-                }`}
-                title="Switch Target Exam (GATE or UPSC)"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300/80 transition cursor-pointer"
+                title="Switch Target Exam"
               >
-                {isUpsc ? <Landmark className="w-3.5 h-3.5 text-amber-400" /> : <GraduationCap className="w-3.5 h-3.5 text-indigo-400" />}
+                {isUpsc ? <Landmark className="w-3.5 h-3.5 text-amber-800" /> : <GraduationCap className="w-3.5 h-3.5 text-amber-800" />}
                 <span>{currentUser?.selected_exam || 'GATE'}</span>
-                <ChevronDown className="w-3 h-3 opacity-70" />
+                <ChevronDown className="w-3 h-3 text-amber-800 opacity-70" />
               </button>
 
               {showExamDropdown && (
-                <div className="absolute top-full left-0 mt-1.5 w-48 bg-slate-900 border border-slate-700/80 rounded-2xl p-1.5 shadow-2xl z-50 space-y-1">
+                <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-yellow-200 rounded-3xl p-1.5 shadow-xl z-50 space-y-1">
                   <button
                     onClick={() => handleSelectExam('GATE')}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-left transition cursor-pointer ${
-                      !isUpsc ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl text-xs font-semibold text-left transition cursor-pointer ${
+                      !isUpsc ? 'bg-amber-400 text-slate-900 shadow-sm' : 'text-slate-700 hover:bg-yellow-50'
                     }`}
                   >
                     <div className="flex items-center gap-2">
-                      <GraduationCap className="w-4 h-4 text-indigo-300" />
+                      <GraduationCap className="w-4 h-4" />
                       <span>GATE CSE / DA</span>
                     </div>
-                    {!isUpsc && <Check className="w-3.5 h-3.5" />}
+                    {!isUpsc && <Check className="w-3.5 h-3.5 text-slate-900" />}
                   </button>
 
                   <button
                     onClick={() => handleSelectExam('UPSC')}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-left transition cursor-pointer ${
-                      isUpsc ? 'bg-amber-600 text-white' : 'text-slate-300 hover:bg-slate-800'
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl text-xs font-semibold text-left transition cursor-pointer ${
+                      isUpsc ? 'bg-amber-400 text-slate-900 shadow-sm' : 'text-slate-700 hover:bg-yellow-50'
                     }`}
                   >
                     <div className="flex items-center gap-2">
-                      <Landmark className="w-4 h-4 text-amber-300" />
+                      <Landmark className="w-4 h-4" />
                       <span>UPSC CSE</span>
                     </div>
-                    {isUpsc && <Check className="w-3.5 h-3.5" />}
+                    {isUpsc && <Check className="w-3.5 h-3.5 text-slate-900" />}
                   </button>
                 </div>
               )}
             </div>
 
             {/* Countdown Badge */}
-            <div className="hidden lg:flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-800/80 border border-slate-700/60 text-xs">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
-              <span className="text-slate-400">Exam:</span>
-              <span className="font-semibold text-amber-300">
-                {daysInfo.isPassed ? 'Exam Day!' : `${daysInfo.days}d Left`}
+            <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs">
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+              <span className="text-slate-600 font-medium">Days Left:</span>
+              <span className="font-bold text-amber-800">
+                {daysInfo.isPassed ? 'Exam Day!' : `${daysInfo.days} Days`}
               </span>
             </div>
           </div>
 
-          {/* Right: User Switcher, SQLite DB Badge & Theme Toggle */}
+          {/* Right: Gemini AI Badge, Google Calendar Status & User Switcher */}
           <div className="flex items-center gap-2 sm:gap-3">
             
-            {/* Live Database Sync Status */}
-            <div
-              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-800/60 border border-slate-700/60 text-xs text-slate-300"
-              title="All sessions and goals persist to SQLite database"
-            >
-              <Database className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-[11px] font-medium text-slate-300">SQLite Synced</span>
-              <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+            {/* Gemini & Google Calendar Integration Status */}
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs font-medium text-amber-900">
+              <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+              <span>Gemini AI</span>
+              <span className="text-slate-300">•</span>
+              <Calendar className="w-3.5 h-3.5 text-amber-600" />
+              <span>G-Calendar Sync</span>
             </div>
 
-            {/* Quick Aspirant Switcher (Devesh <-> Sarvesh) */}
+            {/* User Switcher Pill (Devesh / Sarvesh) */}
             <div className="relative">
               <button
                 onClick={() => setShowUserDropdown(!showUserDropdown)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700 text-xs font-semibold text-slate-200 transition cursor-pointer shadow-sm"
-                title="Switch Aspirant Account (Devesh / Sarvesh)"
+                className="flex items-center gap-2 px-3.5 py-1.5 rounded-2xl bg-amber-400 hover:bg-amber-500 text-slate-900 text-xs font-bold transition cursor-pointer shadow-sm shadow-amber-400/20"
+                title="Switch Aspirant Profile"
               >
-                <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-[10px] text-white font-bold">
-                  {currentUser?.name?.[0] || 'U'}
+                <div className="w-5 h-5 rounded-full bg-slate-900 text-amber-300 flex items-center justify-center text-[10px] font-black">
+                  {currentUser?.name?.[0] || 'D'}
                 </div>
-                <span className="max-w-[100px] sm:max-w-[140px] truncate font-medium">
+                <span className="max-w-[100px] sm:max-w-[140px] truncate font-bold">
                   {currentUser?.name || 'Devesh Mishra'}
                 </span>
-                <ChevronDown className="w-3 h-3 text-slate-400" />
+                <ChevronDown className="w-3 h-3 text-slate-900 opacity-80" />
               </button>
 
               {showUserDropdown && (
-                <div className="absolute top-full right-0 mt-1.5 w-56 bg-slate-900 border border-slate-700/80 rounded-2xl p-2 shadow-2xl z-50 space-y-1">
-                  <div className="px-2.5 py-1.5 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                    Select Aspirant
+                <div className="absolute top-full right-0 mt-2 w-56 bg-white border border-yellow-200 rounded-3xl p-2 shadow-2xl z-50 space-y-1">
+                  <div className="px-3 py-1 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                    Switch Aspirant
                   </div>
 
                   {availableUsers.map((u) => {
@@ -171,22 +158,22 @@ export default function Header() {
                       <button
                         key={u.id}
                         onClick={() => handleSelectUser(u.id)}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-left transition cursor-pointer ${
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-2xl text-xs font-medium text-left transition cursor-pointer ${
                           isSelected
-                            ? 'bg-indigo-600 text-white font-semibold'
-                            : 'text-slate-300 hover:bg-slate-800'
+                            ? 'bg-amber-400 text-slate-900 font-bold'
+                            : 'text-slate-700 hover:bg-yellow-50'
                         }`}
                       >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className="w-5 h-5 rounded-full bg-slate-700 flex items-center justify-center text-[10px] text-slate-200 font-bold flex-shrink-0">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-6 h-6 rounded-full bg-yellow-100 text-amber-800 flex items-center justify-center text-xs font-bold flex-shrink-0">
                             {u.name?.[0] || 'U'}
                           </div>
                           <div className="truncate">
-                            <div className="truncate">{u.name}</div>
-                            <div className="text-[10px] opacity-75">{u.selected_exam} Prep</div>
+                            <div className="truncate font-semibold">{u.name}</div>
+                            <div className="text-[10px] text-slate-500">{u.selected_exam} Prep</div>
                           </div>
                         </div>
-                        {isSelected && <Check className="w-4 h-4 flex-shrink-0" />}
+                        {isSelected && <Check className="w-4 h-4 flex-shrink-0 text-slate-900" />}
                       </button>
                     );
                   })}
@@ -194,18 +181,6 @@ export default function Header() {
               )}
             </div>
 
-            {/* Light / Dark Mode Toggle */}
-            <button
-              onClick={toggleTheme}
-              className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
-              title={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
-            >
-              {theme === 'dark' ? (
-                <Sun className="w-4 h-4 text-amber-400 hover:rotate-45 transition-transform" />
-              ) : (
-                <Moon className="w-4 h-4 text-indigo-400 hover:-rotate-12 transition-transform" />
-              )}
-            </button>
           </div>
         </div>
       </div>

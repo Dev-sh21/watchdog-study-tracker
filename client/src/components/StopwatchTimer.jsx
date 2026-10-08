@@ -8,13 +8,11 @@ import {
   Flag,
   Save,
   CheckCircle2,
-  Maximize2,
-  Minimize2,
-  Target,
   BookOpen,
   Volume2,
   VolumeX,
-  FileCheck
+  FileCheck,
+  Target
 } from 'lucide-react';
 import { sounds } from '../utils/audio';
 
@@ -33,11 +31,9 @@ export default function StopwatchTimer() {
     handleToggleTarget
   } = useApp();
 
-  const [lapNote, setLapNote] = useState('');
-  const [sessionNotes, setSessionNotes] = useState('');
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [sessionNotes, setSessionNotes] = useState('');
 
   // Keyboard shortcuts (Space = Play/Pause, L = Lap)
   useEffect(() => {
@@ -58,12 +54,6 @@ export default function StopwatchTimer() {
 
   const activeTarget = targets.find((t) => t.id === timer.active_target_id);
 
-  const handleLapSubmit = (e) => {
-    e.preventDefault();
-    recordLap(lapNote);
-    setLapNote('');
-  };
-
   const handleConfirmSaveSession = async () => {
     await saveCurrentSession(sessionNotes);
     setSessionNotes('');
@@ -76,153 +66,107 @@ export default function StopwatchTimer() {
   };
 
   return (
-    <div className={`space-y-6 ${isFullscreen ? 'fixed inset-0 z-50 bg-slate-950 p-6 flex flex-col justify-center max-w-none' : ''}`}>
-      {/* Top Control Bar: Subject & Target Binding */}
-      <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 sm:p-5 backdrop-blur-sm">
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
-          
-          {/* Subject Dropdown */}
-          <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-2">
-            <label className="text-xs font-medium text-slate-400 flex items-center gap-1.5 min-w-[90px]">
-              <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Subject:</span>
-            </label>
-            <select
-              value={timer.active_subject}
-              onChange={(e) => setTimerSubject(e.target.value)}
-              className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full cursor-pointer"
-            >
-              {settings.subjects?.map((sub) => (
-                <option key={sub} value={sub}>
-                  {sub}
-                </option>
-              ))}
-            </select>
+    <div className="bg-white border border-yellow-200/90 rounded-3xl p-6 sm:p-8 shadow-sm shadow-amber-500/5 space-y-6">
+      
+      {/* Top Bar: Curvy Subject Selector & Audio Toggle */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pb-3 border-b border-yellow-100">
+        
+        {/* Subject Pill Dropdown */}
+        <div className="flex items-center gap-2 flex-1">
+          <div className="w-8 h-8 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center flex-shrink-0">
+            <BookOpen className="w-4 h-4" />
           </div>
-
-          {/* Active Target Dropdown Binding */}
-          <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-2">
-            <label className="text-xs font-medium text-slate-400 flex items-center gap-1.5 min-w-[90px]">
-              <Target className="w-3.5 h-3.5 text-rose-400" />
-              <span>Goal/Target:</span>
-            </label>
-            <select
-              value={timer.active_target_id || ''}
-              onChange={(e) => setTimerActiveTarget(e.target.value ? Number(e.target.value) : null)}
-              className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-rose-500 w-full cursor-pointer"
-            >
-              <option value="">(None - General Study Block)</option>
-              {targets
-                .filter((t) => t.status !== 'completed' || t.id === timer.active_target_id)
-                .map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.status === 'completed' ? '✓ ' : '🎯 '} {t.title} ({t.subject})
-                  </option>
-                ))}
-            </select>
-          </div>
-
-          {/* Sound & Fullscreen Toggles */}
-          <div className="flex items-center justify-end gap-2">
-            <button
-              onClick={toggleSound}
-              className={`p-2.5 rounded-xl border text-sm transition cursor-pointer ${
-                soundEnabled
-                  ? 'bg-slate-800 border-slate-700 text-indigo-400 hover:text-indigo-300'
-                  : 'bg-slate-800/40 border-slate-800 text-slate-500 hover:text-slate-400'
-              }`}
-              title={soundEnabled ? 'Sound is On' : 'Sound is Muted'}
-            >
-              {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-            </button>
-
-            <button
-              onClick={() => setIsFullscreen(!isFullscreen)}
-              className="p-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 transition cursor-pointer"
-              title={isFullscreen ? 'Exit Fullscreen' : 'Zen Focus Fullscreen'}
-            >
-              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-            </button>
-          </div>
+          <select
+            value={timer.active_subject}
+            onChange={(e) => setTimerSubject(e.target.value)}
+            className="bg-yellow-50/70 hover:bg-yellow-50 border border-yellow-200 text-slate-800 text-xs sm:text-sm font-semibold rounded-2xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400 w-full cursor-pointer transition"
+          >
+            {settings.subjects?.map((sub) => (
+              <option key={sub} value={sub}>
+                {sub}
+              </option>
+            ))}
+          </select>
         </div>
 
-        {/* If Active Target is Selected, display dynamic card with 1-click completion! */}
-        {activeTarget && (
-          <div className="mt-4 pt-3.5 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-indigo-950/20 px-3.5 py-2.5 rounded-xl border border-indigo-500/20">
-            <div className="flex items-center gap-3">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              <div>
-                <span className="text-xs text-indigo-300 font-semibold uppercase tracking-wider">
-                  Currently Studying Target:
-                </span>
-                <p className="text-sm font-medium text-slate-100">{activeTarget.title}</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 self-end sm:self-auto">
-              <span className="text-xs text-slate-400">
-                Tracked: <strong className="text-slate-200">{formatDurationHuman((activeTarget.actual_seconds || 0) + (timer.is_running ? timer.elapsed_seconds : 0))}</strong>
-              </span>
-
-              {/* Instant Tick Button */}
-              <button
-                onClick={() => handleToggleTarget(activeTarget.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                  activeTarget.status === 'completed'
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                    : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm'
-                }`}
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>{activeTarget.status === 'completed' ? 'Completed ✓' : 'Mark as Done!'}</span>
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Mute/Unmute Curvy Button */}
+        <div className="flex items-center justify-end gap-2">
+          <button
+            onClick={toggleSound}
+            className={`p-2 rounded-2xl border text-xs transition cursor-pointer ${
+              soundEnabled
+                ? 'bg-amber-100 text-amber-800 border-amber-300'
+                : 'bg-slate-100 text-slate-400 border-slate-200'
+            }`}
+            title={soundEnabled ? 'Audio On' : 'Audio Muted'}
+          >
+            {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+          </button>
+        </div>
       </div>
 
-      {/* Big Stopwatch Display Card */}
-      <div className="relative bg-gradient-to-b from-slate-900/90 to-slate-950 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-2xl flex flex-col items-center justify-center overflow-hidden">
+      {/* Linked Goal Banner (if studying specific goal) */}
+      {activeTarget && (
+        <div className="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-3.5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
+            <div className="truncate">
+              <span className="text-[10px] uppercase font-bold text-amber-800 block tracking-wider">
+                Focusing on Target:
+              </span>
+              <p className="text-xs sm:text-sm font-bold text-slate-900 truncate">{activeTarget.title}</p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => handleToggleTarget(activeTarget.id)}
+            className="px-3 py-1.5 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition flex items-center gap-1 shadow-sm cursor-pointer flex-shrink-0"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>Done ✓</span>
+          </button>
+        </div>
+      )}
+
+      {/* Big Curvy Stopwatch Display Card */}
+      <div className="bg-gradient-to-b from-yellow-50/60 to-white border border-yellow-200 rounded-3xl p-6 sm:p-8 flex flex-col items-center justify-center relative overflow-hidden">
         
-        {/* Ambient background glow */}
+        {/* Soft yellow ambient glow */}
         <div
-          className={`absolute w-72 h-72 rounded-full blur-3xl opacity-20 -top-10 transition-colors duration-700 pointer-events-none ${
-            timer.is_running ? 'bg-indigo-500' : 'bg-slate-600'
+          className={`absolute w-56 h-56 rounded-full blur-3xl opacity-30 -top-8 transition-all duration-700 pointer-events-none ${
+            timer.is_running ? 'bg-amber-400' : 'bg-yellow-200'
           }`}
         />
 
-        {/* Status Tag */}
-        <div className="mb-4 flex items-center gap-2">
+        {/* Running Status Badge */}
+        <div className="mb-2 flex items-center gap-2">
           <span
             className={`w-2.5 h-2.5 rounded-full ${
-              timer.is_running ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'
+              timer.is_running ? 'bg-emerald-500 animate-ping' : 'bg-amber-400'
             }`}
           />
-          <span className="text-xs sm:text-sm font-semibold uppercase tracking-widest text-slate-400">
-            {timer.is_running ? 'Focus Session Active' : timer.elapsed_seconds > 0 ? 'Paused' : 'Ready to Study'}
+          <span className="text-xs font-bold uppercase tracking-widest text-amber-800">
+            {timer.is_running ? 'Focusing Now' : timer.elapsed_seconds > 0 ? 'Paused' : 'Ready'}
           </span>
         </div>
 
-        {/* Time Digits */}
-        <div className="font-mono-numbers text-5xl sm:text-7xl md:text-8xl font-black tracking-tight text-white select-none py-2 drop-shadow-md">
+        {/* Large Curvy Numbers */}
+        <div className="font-mono-numbers text-6xl sm:text-7xl font-black text-slate-900 py-3 tracking-tight select-none">
           {formatTimeStopwatch(timer.elapsed_seconds)}
         </div>
 
-        {/* Small hint label */}
-        <div className="text-xs text-slate-500 font-medium mt-1">
-          {timer.elapsed_seconds > 3600
-            ? 'HOURS : MINUTES : SECONDS'
-            : 'MINUTES : SECONDS'}
+        <div className="text-[11px] font-semibold text-slate-400 tracking-wider">
+          {timer.elapsed_seconds > 3600 ? 'HOURS : MINUTES : SECONDS' : 'MINUTES : SECONDS'}
         </div>
 
-        {/* Main Stopwatch Action Buttons */}
-        <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 mt-8 sm:mt-10">
+        {/* Main Action Buttons (Curvy & Bold) */}
+        <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 mt-6">
           
-          {/* Start / Pause Button */}
+          {/* Start / Pause */}
           {timer.is_running ? (
             <button
               onClick={pauseTimer}
-              className="flex items-center gap-2 px-6 sm:px-8 py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-base sm:text-lg shadow-lg shadow-amber-500/25 transition-all transform active:scale-95 cursor-pointer glow-amber"
+              className="flex items-center gap-2 px-8 py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-base shadow-lg shadow-amber-500/25 transform active:scale-95 transition cursor-pointer"
             >
               <Pause className="w-5 h-5 fill-current" />
               <span>Pause</span>
@@ -230,190 +174,141 @@ export default function StopwatchTimer() {
           ) : (
             <button
               onClick={startTimer}
-              className="flex items-center gap-2 px-6 sm:px-8 py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-base sm:text-lg shadow-lg shadow-emerald-500/25 transition-all transform active:scale-95 cursor-pointer glow-emerald"
+              className="flex items-center gap-2 px-8 py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-base shadow-lg shadow-amber-400/30 transform active:scale-95 transition cursor-pointer"
             >
               <Play className="w-5 h-5 fill-current" />
               <span>{timer.elapsed_seconds > 0 ? 'Resume' : 'Start Focus'}</span>
             </button>
           )}
 
-          {/* Lap Button (Active when timer is running) */}
+          {/* Lap Button */}
           <button
             onClick={() => recordLap()}
             disabled={!timer.is_running}
-            className={`flex items-center gap-2 px-5 sm:px-6 py-3.5 rounded-2xl border font-semibold text-sm sm:text-base transition-all transform active:scale-95 cursor-pointer ${
+            className={`flex items-center gap-2 px-5 py-3.5 rounded-2xl font-bold text-sm transition transform active:scale-95 cursor-pointer ${
               timer.is_running
-                ? 'bg-indigo-600/20 border-indigo-500/40 text-indigo-300 hover:bg-indigo-600/30'
-                : 'bg-slate-800/40 border-slate-800 text-slate-600 cursor-not-allowed'
+                ? 'bg-yellow-100 hover:bg-yellow-200 text-amber-900 border border-yellow-300'
+                : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
             }`}
-            title="Record Lap split time (Hotkey: L)"
+            title="Record lap split time (Hotkey: L)"
           >
             <Flag className="w-4 h-4" />
             <span>Lap</span>
           </button>
 
-          {/* Save Session Button */}
+          {/* Save & Log to Database */}
           {timer.elapsed_seconds > 0 && (
             <button
               onClick={() => setShowSaveModal(true)}
-              className="flex items-center gap-2 px-5 sm:px-6 py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm sm:text-base shadow-lg shadow-indigo-600/25 transition-all transform active:scale-95 cursor-pointer"
-              title="Save this study block to database"
+              className="flex items-center gap-2 px-5 py-3.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-yellow-300 font-bold text-sm shadow-md transition transform active:scale-95 cursor-pointer"
+              title="Save session to database"
             >
               <Save className="w-4 h-4" />
               <span>Save & Log</span>
             </button>
           )}
 
-          {/* Reset Button */}
+          {/* Reset */}
           {timer.elapsed_seconds > 0 && !timer.is_running && (
             <button
               onClick={resetTimer}
-              className="flex items-center gap-2 px-4 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-semibold text-sm transition-all transform active:scale-95 cursor-pointer"
-              title="Reset timer to 0 without saving"
+              className="p-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition transform active:scale-95 cursor-pointer"
+              title="Reset without saving"
             >
               <RotateCcw className="w-4 h-4" />
-              <span>Reset</span>
             </button>
           )}
         </div>
 
-        {/* Hotkey notice */}
-        <p className="text-xs text-slate-500 mt-6 hidden sm:block">
-          Pro-tip: Press <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">Space</kbd> to Play/Pause,{' '}
-          <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">L</kbd> for Lap.
+        <p className="text-[11px] text-slate-400 mt-4 hidden sm:block">
+          Shortcut: <kbd className="px-1.5 py-0.5 rounded-lg bg-yellow-100 text-slate-800 font-mono text-[10px]">Space</kbd> to Pause/Resume,{' '}
+          <kbd className="px-1.5 py-0.5 rounded-lg bg-yellow-100 text-slate-800 font-mono text-[10px]">L</kbd> for Lap.
         </p>
       </div>
 
-      {/* Laps Section */}
+      {/* Laps List (Curvy Table) */}
       {timer.laps && timer.laps.length > 0 && (
-        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 sm:p-6 backdrop-blur-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-semibold text-white flex items-center gap-2">
-              <Flag className="w-4 h-4 text-indigo-400" />
+        <div className="space-y-3 pt-2">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+              <Flag className="w-3.5 h-3.5 text-amber-600" />
               <span>Recorded Laps ({timer.laps.length})</span>
-            </h3>
-            
-            {/* Quick Lap Note Input */}
-            {timer.is_running && (
-              <form onSubmit={handleLapSubmit} className="flex items-center gap-2">
-                <input
-                  type="text"
-                  placeholder="Add note to next lap..."
-                  value={lapNote}
-                  onChange={(e) => setLapNote(e.target.value)}
-                  className="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-36 sm:w-56"
-                />
-                <button
-                  type="submit"
-                  className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium cursor-pointer"
-                >
-                  Lap + Note
-                </button>
-              </form>
-            )}
+            </h4>
           </div>
 
-          <div className="overflow-x-auto max-h-60 overflow-y-auto">
-            <table className="w-full text-left text-xs sm:text-sm">
-              <thead className="text-xs uppercase text-slate-400 border-b border-slate-800">
-                <tr>
-                  <th className="py-2 px-3">Lap</th>
-                  <th className="py-2 px-3">Lap Time</th>
-                  <th className="py-2 px-3">Total Time</th>
-                  <th className="py-2 px-3">Timestamp</th>
-                  <th className="py-2 px-3">Notes</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {timer.laps
-                  .slice()
-                  .reverse()
-                  .map((lap, index) => (
-                    <tr key={index} className="hover:bg-slate-800/30 font-mono-numbers">
-                      <td className="py-2.5 px-3 font-semibold text-indigo-400">
-                        #{lap.lapNumber || timer.laps.length - index}
-                      </td>
-                      <td className="py-2.5 px-3 font-medium text-emerald-400">
-                        +{formatTimeStopwatch(lap.lapTime)}
-                      </td>
-                      <td className="py-2.5 px-3 text-slate-200">
-                        {formatTimeStopwatch(lap.total)}
-                      </td>
-                      <td className="py-2.5 px-3 text-slate-500 text-xs">
-                        {lap.timestamp || '--:--'}
-                      </td>
-                      <td className="py-2.5 px-3 text-slate-300 font-sans text-xs italic">
-                        {lap.note || '—'}
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
+          <div className="max-h-44 overflow-y-auto rounded-2xl border border-yellow-200 divide-y divide-yellow-100 bg-yellow-50/30">
+            {timer.laps
+              .slice()
+              .reverse()
+              .map((lap, index) => (
+                <div key={index} className="flex items-center justify-between px-3.5 py-2 text-xs font-mono-numbers">
+                  <span className="font-bold text-amber-800">
+                    #{lap.lapNumber || timer.laps.length - index}
+                  </span>
+                  <span className="font-semibold text-emerald-600">
+                    +{formatTimeStopwatch(lap.lapTime)}
+                  </span>
+                  <span className="text-slate-700 font-medium">
+                    {formatTimeStopwatch(lap.total)}
+                  </span>
+                  <span className="text-slate-400 text-[10px] font-sans">
+                    {lap.timestamp || '--:--'}
+                  </span>
+                </div>
+              ))}
           </div>
         </div>
       )}
 
-      {/* Save Session Modal */}
+      {/* Save Session Modal (Curvy White & Yellow) */}
       {showSaveModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white border border-yellow-300 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center">
                 <FileCheck className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-white">Save Study Session</h3>
-                <p className="text-xs text-slate-400">Log this session to your database & weekly stats</p>
+                <h3 className="text-base font-black text-slate-900">Save Study Session</h3>
+                <p className="text-xs text-slate-500">Log this session to SQLite & weekly stats</p>
               </div>
             </div>
 
-            <div className="bg-slate-800/60 rounded-xl p-3.5 space-y-2 text-sm border border-slate-700/50 font-mono-numbers">
+            <div className="bg-yellow-50/80 rounded-2xl p-3.5 space-y-1.5 text-xs border border-yellow-200">
               <div className="flex justify-between">
-                <span className="text-slate-400 font-sans">Duration:</span>
-                <span className="font-bold text-emerald-400">{formatDurationHuman(timer.elapsed_seconds)}</span>
+                <span className="text-slate-500">Duration:</span>
+                <span className="font-bold text-amber-900">{formatDurationHuman(timer.elapsed_seconds)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400 font-sans">Subject:</span>
-                <span className="text-slate-200 font-sans">{timer.active_subject}</span>
+                <span className="text-slate-500">Subject:</span>
+                <span className="font-semibold text-slate-800">{timer.active_subject}</span>
               </div>
-              {activeTarget && (
-                <div className="flex justify-between">
-                  <span className="text-slate-400 font-sans">Linked Target:</span>
-                  <span className="text-indigo-300 font-sans truncate max-w-[200px]">{activeTarget.title}</span>
-                </div>
-              )}
-              {timer.laps.length > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-slate-400 font-sans">Total Laps:</span>
-                  <span className="text-slate-300">{timer.laps.length} laps</span>
-                </div>
-              )}
             </div>
 
             <div>
-              <label className="text-xs text-slate-400 font-medium block mb-1">
-                Session Notes (Optional):
+              <label className="text-xs text-slate-600 font-bold block mb-1">
+                Quick Note (Optional):
               </label>
               <textarea
-                placeholder="What topics, formulas, or PYQs did you solve?"
+                placeholder="Topics or PYQs covered..."
                 value={sessionNotes}
                 onChange={(e) => setSessionNotes(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none h-20"
+                className="w-full bg-yellow-50/50 border border-yellow-200 rounded-2xl p-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none h-16"
               />
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2">
+            <div className="flex items-center justify-end gap-2 pt-1">
               <button
                 onClick={() => setShowSaveModal(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-slate-800 cursor-pointer"
+                className="px-4 py-2 rounded-2xl text-xs font-semibold text-slate-500 hover:bg-slate-100 cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmSaveSession}
-                className="px-5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md cursor-pointer"
+                className="px-5 py-2 rounded-2xl text-xs font-bold bg-amber-400 hover:bg-amber-500 text-slate-900 shadow-md cursor-pointer"
               >
-                Confirm & Log
+                Save & Log ✓
               </button>
             </div>
           </div>

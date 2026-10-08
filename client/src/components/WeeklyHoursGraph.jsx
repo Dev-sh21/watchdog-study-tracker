@@ -3,11 +3,11 @@ import { useApp } from '../context/AppContext';
 import { formatDurationHuman } from '../utils/timeFormat';
 import {
   BarChart3,
+  RefreshCw,
+  Flame,
   Clock,
   TrendingUp,
-  Flame,
-  Award,
-  RefreshCw
+  Award
 } from 'lucide-react';
 
 export default function WeeklyHoursGraph() {
@@ -15,9 +15,9 @@ export default function WeeklyHoursGraph() {
 
   if (!analytics) {
     return (
-      <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 text-center text-slate-400">
-        <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-indigo-400" />
-        <p className="text-xs">Loading weekly hours graph...</p>
+      <div className="bg-white border border-yellow-200 rounded-3xl p-6 text-center text-slate-400">
+        <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-amber-500" />
+        <p className="text-xs font-semibold">Loading weekly hours...</p>
       </div>
     );
   }
@@ -29,7 +29,6 @@ export default function WeeklyHoursGraph() {
     todaySeconds = 0,
     todayHours = 0,
     weeklyAverageActiveDaysHours = 0,
-    overallDailyAverageHours = 0,
     currentStreak = 0
   } = analytics;
 
@@ -37,95 +36,107 @@ export default function WeeklyHoursGraph() {
   const dailyGoal = settings.daily_goal_hours || 6;
 
   return (
-    <div className="bg-gradient-to-b from-slate-900/90 to-slate-950 border border-slate-800 rounded-3xl p-5 sm:p-7 shadow-xl backdrop-blur-sm space-y-6">
+    <div className="bg-white border border-yellow-200/90 rounded-3xl p-6 sm:p-8 shadow-sm shadow-amber-500/5 space-y-6">
       
-      {/* Header with Title & Refresh */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
-        <div>
-          <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-            <BarChart3 className="w-5 h-5 text-indigo-400" />
-            <span>Weekly Study Hours (Monday – Sunday)</span>
-          </h3>
-          <p className="text-xs text-slate-400">
-            Total {weeklyTotalHours} hours studied this week • Saved in SQLite Database
-          </p>
+      {/* Header: Title & Refresh */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-yellow-100">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center">
+            <BarChart3 className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-slate-900 leading-tight">
+              Weekly Study Hours (Monday – Sunday)
+            </h3>
+            <p className="text-[11px] text-amber-800 font-medium">
+              Total {weeklyTotalHours} hours studied this week • Saved in SQLite Database
+            </p>
+          </div>
         </div>
 
         <button
           onClick={refreshAll}
-          className="self-end sm:self-auto p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700 transition cursor-pointer"
+          className="self-end sm:self-auto p-2 rounded-2xl bg-yellow-50 hover:bg-yellow-100 text-amber-800 border border-yellow-200 transition cursor-pointer"
           title="Refresh Graph"
         >
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>
 
-      {/* KPI Stat Cards Row */}
+      {/* KPI Cards Row (Curvy & Clean) */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {/* Total Weekly Hours */}
-        <div className="bg-slate-950/60 border border-slate-800/80 p-3.5 rounded-2xl">
-          <span className="text-[11px] text-slate-400 font-semibold uppercase block">This Week</span>
-          <div className="text-xl sm:text-2xl font-black text-indigo-300 mt-0.5 font-mono-numbers">
-            {weeklyTotalHours} <span className="text-xs font-normal text-slate-400">hrs</span>
+        <div className="bg-yellow-50/50 border border-yellow-200 p-4 rounded-2xl">
+          <span className="text-[10px] text-amber-800 font-bold uppercase tracking-wider block">
+            This Week
+          </span>
+          <div className="text-2xl font-black text-slate-900 mt-0.5 font-mono-numbers">
+            {weeklyTotalHours} <span className="text-xs font-semibold text-slate-500">hrs</span>
           </div>
-          <span className="text-[10px] text-slate-500 block mt-0.5">
+          <span className="text-[10px] text-slate-400 block mt-0.5">
             {formatDurationHuman(weeklyTotalSeconds)}
           </span>
         </div>
 
         {/* Today's Focus */}
-        <div className="bg-slate-950/60 border border-slate-800/80 p-3.5 rounded-2xl">
-          <span className="text-[11px] text-slate-400 font-semibold uppercase block">Today's Focus</span>
-          <div className="text-xl sm:text-2xl font-black text-emerald-400 mt-0.5 font-mono-numbers">
-            {todayHours} <span className="text-xs font-normal text-slate-400">hrs</span>
+        <div className="bg-yellow-50/50 border border-yellow-200 p-4 rounded-2xl">
+          <span className="text-[10px] text-amber-800 font-bold uppercase tracking-wider block">
+            Today's Focus
+          </span>
+          <div className="text-2xl font-black text-emerald-600 mt-0.5 font-mono-numbers">
+            {todayHours} <span className="text-xs font-semibold text-slate-500">hrs</span>
           </div>
-          <span className="text-[10px] text-slate-500 block mt-0.5">
+          <span className="text-[10px] text-slate-400 block mt-0.5">
             {formatDurationHuman(todaySeconds)}
           </span>
         </div>
 
         {/* Daily Average */}
-        <div className="bg-slate-950/60 border border-slate-800/80 p-3.5 rounded-2xl">
-          <span className="text-[11px] text-slate-400 font-semibold uppercase block">Daily Average</span>
-          <div className="text-xl sm:text-2xl font-black text-purple-400 mt-0.5 font-mono-numbers">
-            {weeklyAverageActiveDaysHours} <span className="text-xs font-normal text-slate-400">hrs/day</span>
+        <div className="bg-yellow-50/50 border border-yellow-200 p-4 rounded-2xl">
+          <span className="text-[10px] text-amber-800 font-bold uppercase tracking-wider block">
+            Daily Average
+          </span>
+          <div className="text-2xl font-black text-amber-600 mt-0.5 font-mono-numbers">
+            {weeklyAverageActiveDaysHours} <span className="text-xs font-semibold text-slate-500">hrs/day</span>
           </div>
-          <span className="text-[10px] text-slate-500 block mt-0.5">
-            Overall: {overallDailyAverageHours}h/day
+          <span className="text-[10px] text-slate-400 block mt-0.5">
+            Active days average
           </span>
         </div>
 
-        {/* Streak */}
-        <div className="bg-slate-950/60 border border-slate-800/80 p-3.5 rounded-2xl">
-          <span className="text-[11px] text-slate-400 font-semibold uppercase block">Study Streak</span>
-          <div className="text-xl sm:text-2xl font-black text-orange-400 mt-0.5 flex items-center gap-1 font-mono-numbers">
-            <Flame className="w-5 h-5 fill-orange-400" />
+        {/* Study Streak */}
+        <div className="bg-yellow-50/50 border border-yellow-200 p-4 rounded-2xl">
+          <span className="text-[10px] text-amber-800 font-bold uppercase tracking-wider block">
+            Study Streak
+          </span>
+          <div className="text-2xl font-black text-amber-500 mt-0.5 flex items-center gap-1 font-mono-numbers">
+            <Flame className="w-5 h-5 fill-amber-500 text-amber-500" />
             <span>{currentStreak} Days</span>
           </div>
-          <span className="text-[10px] text-slate-500 block mt-0.5">
-            Consecutive days
+          <span className="text-[10px] text-slate-400 block mt-0.5">
+            Consecutive study
           </span>
         </div>
       </div>
 
-      {/* Interactive Weekly Bar Chart */}
+      {/* Interactive Curvy Bar Chart */}
       <div className="pt-2">
-        <div className="flex items-center justify-between text-xs text-slate-400 mb-4">
-          <span className="text-[11px] font-medium text-slate-400">
-            Hover or tap any bar to view exact hours and session count:
+        <div className="flex items-center justify-between text-xs text-slate-500 mb-3 px-1">
+          <span className="text-[11px] font-semibold text-slate-600">
+            Daily Study Progress:
           </span>
           <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1 text-[11px]">
-              <span className="w-2.5 h-2.5 rounded-sm bg-indigo-500" /> Studied Hours
+            <span className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400" /> Studied Hours
             </span>
-            <span className="flex items-center gap-1 text-[11px]">
-              <span className="w-2.5 h-0.5 bg-amber-400" /> Goal Line ({dailyGoal}h)
+            <span className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700">
+              <span className="w-2.5 h-0.5 bg-amber-600" /> Goal ({dailyGoal}h)
             </span>
           </div>
         </div>
 
         {/* Bar Chart Container */}
-        <div className="h-56 flex items-end justify-between gap-2 sm:gap-4 pt-4 pb-2 px-2 border-b border-slate-800/80">
+        <div className="h-56 flex items-end justify-between gap-2 sm:gap-4 pt-4 pb-2 px-2 border-b border-yellow-200 bg-yellow-50/20 rounded-2xl">
           {weekData.map((dayItem, index) => {
             const heightPercent = Math.min(100, (dayItem.hours / maxBarHours) * 100);
             const metGoal = dayItem.hours >= dailyGoal;
@@ -134,29 +145,29 @@ export default function WeeklyHoursGraph() {
               <div key={index} className="flex-1 flex flex-col items-center h-full justify-end group">
                 
                 {/* Tooltip on Hover */}
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 mb-1.5 bg-slate-800 border border-slate-700 text-slate-200 text-[11px] rounded-lg py-1 px-2 pointer-events-none text-center shadow-lg whitespace-nowrap z-10">
-                  <div className="font-bold text-white">{dayItem.hours} hrs</div>
-                  <div className="text-[10px] text-slate-400">{dayItem.sessionCount} session(s)</div>
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 mb-1.5 bg-slate-900 text-white text-[11px] font-bold rounded-xl py-1 px-2.5 pointer-events-none text-center shadow-lg whitespace-nowrap z-10">
+                  <div>{dayItem.hours} hrs</div>
+                  <div className="text-[10px] text-amber-300 font-normal">{dayItem.sessionCount} session(s)</div>
                 </div>
 
-                {/* Vertical Bar */}
-                <div className="w-full max-w-[44px] bg-slate-800/80 rounded-t-xl h-full flex items-end p-1 relative">
+                {/* Vertical Bar Column */}
+                <div className="w-full max-w-[42px] bg-yellow-100/60 rounded-t-2xl h-full flex items-end p-1 relative">
                   
                   {/* Goal Marker Line */}
                   <div
-                    className="absolute left-0 right-0 border-t border-dashed border-amber-400/40 pointer-events-none"
+                    className="absolute left-0 right-0 border-t border-dashed border-amber-600/50 pointer-events-none"
                     style={{ bottom: `${(dailyGoal / maxBarHours) * 100}%` }}
                   />
 
-                  {/* Filled Value */}
+                  {/* Filled Value Bar */}
                   <div
-                    className={`w-full rounded-t-lg transition-all duration-700 ${
+                    className={`w-full rounded-t-xl transition-all duration-700 ${
                       dayItem.isToday
-                        ? 'bg-gradient-to-t from-indigo-600 to-indigo-400 shadow-lg shadow-indigo-500/30'
+                        ? 'bg-gradient-to-t from-amber-500 to-amber-400 shadow-md shadow-amber-400/30'
                         : metGoal
-                        ? 'bg-gradient-to-t from-emerald-600 to-emerald-400'
+                        ? 'bg-gradient-to-t from-emerald-500 to-emerald-400'
                         : dayItem.hours > 0
-                        ? 'bg-gradient-to-t from-purple-700 to-indigo-500'
+                        ? 'bg-gradient-to-t from-amber-400 to-yellow-300'
                         : 'bg-transparent'
                     }`}
                     style={{ height: `${heightPercent}%` }}
@@ -164,17 +175,17 @@ export default function WeeklyHoursGraph() {
                 </div>
 
                 {/* Day Labels */}
-                <div className="mt-2.5 text-center">
+                <div className="mt-2 text-center">
                   <span
-                    className={`text-xs font-semibold block ${
+                    className={`text-xs font-bold block ${
                       dayItem.isToday
-                        ? 'text-indigo-400 ring-1 ring-indigo-500/50 bg-indigo-500/10 px-1 py-0.5 rounded-md'
-                        : 'text-slate-400'
+                        ? 'text-amber-900 bg-amber-300/80 px-1.5 py-0.5 rounded-lg'
+                        : 'text-slate-600'
                     }`}
                   >
                     {dayItem.day}
                   </span>
-                  <span className="text-[10px] text-slate-500 font-mono-numbers block mt-0.5">
+                  <span className="text-[10px] text-slate-500 font-mono-numbers font-semibold block mt-0.5">
                     {dayItem.hours}h
                   </span>
                 </div>

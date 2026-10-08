@@ -451,11 +451,13 @@ export function AppProvider({ children }) {
 
   // ==================== TARGET ACTIONS ====================
 
-  const handleCreateTarget = async (title, subject, targetDate) => {
+  const handleCreateTarget = async (title, subject, targetDate, googleEventId = '', geminiTip = '') => {
     const newTarget = await api.createTarget({
       title,
       subject: subject || timer.active_subject || settings.subjects[0],
-      target_date: targetDate
+      target_date: targetDate,
+      google_event_id: googleEventId || '',
+      gemini_tip: geminiTip || ''
     });
     setTargets((prev) => [newTarget, ...prev]);
     return newTarget;
