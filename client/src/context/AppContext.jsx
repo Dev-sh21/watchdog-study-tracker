@@ -61,10 +61,17 @@ export function AppProvider({ children }) {
 
   // Load User Data & Application State
   const loadUserData = useCallback(async () => {
-    const token = api.getAuthToken();
+    let token = api.getAuthToken();
     if (!token) {
-      setCurrentUser(null);
-      return;
+      try {
+        const defaultUser = await api.fetchCurrentUser().catch(() => null);
+        if (defaultUser && defaultUser.token) {
+          api.setAuthToken(defaultUser.token);
+          token = defaultUser.token;
+        }
+      } catch (e) {
+        console.error('Auto login fallback error:', e);
+      }
     }
 
     try {
