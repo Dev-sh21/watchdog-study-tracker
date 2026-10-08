@@ -1,36 +1,137 @@
-// API service to interact with GATE WatchDog backend
+// API service for GATE & UPSC WatchDog
 
-// Determine base URL: works seamlessly whether accessed from localhost or phone (http://10.207.43.176:3000)
 const API_BASE = '/api';
 
+export function getAuthToken() {
+  return localStorage.getItem('watchdog_token') || '';
+}
+
+export function setAuthToken(token) {
+  if (token) {
+    localStorage.setItem('watchdog_token', token);
+  } else {
+    localStorage.removeItem('watchdog_token');
+  }
+}
+
+function getHeaders() {
+  const headers = { 'Content-Type': 'application/json' };
+  const token = getAuthToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+// ================= AUTH APIs =================
+export async function loginUser(username, password) {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password })
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || 'Failed to login');
+  }
+  const data = await res.json();
+  if (data.token) setAuthToken(data.token);
+  return data;
+}
+
+export async function registerUser(username, name, password, exam = 'GATE') {
+  const res = await fetch(`${API_BASE}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, name, password, exam })
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || 'Failed to register');
+  }
+  const data = await res.json();
+  if (data.token) setAuthToken(data.token);
+  return data;
+}
+
+export async function fetchUsersList() {
+  const res = await fetch(`${API_BASE}/auth/users`);
+  return res.json();
+}
+
+export async function switchUserAccount(userId) {
+  const res = await fetch(`${API_BASE}/auth/switch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId })
+  });
+  if (!res.ok) throw new Error('Failed to switch user');
+  const data = await res.json();
+  if (data.token) setAuthToken(data.token);
+  return data;
+}
+
+export async function fetchCurrentUser() {
+  const res = await fetch(`${API_BASE}/auth/me`, {
+    headers: getHeaders()
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function updateSelectedExam(exam) {
+  const res = await fetch(`${API_BASE}/auth/exam`, {
+    method: 'PATCH',
+    headers: getHeaders(),
+    body: JSON.stringify({ exam })
+  });
+  return res.json();
+}
+
+export async function updateUserTheme(theme) {
+  const res = await fetch(`${API_BASE}/auth/theme`, {
+    method: 'PATCH',
+    headers: getHeaders(),
+    body: JSON.stringify({ theme })
+  });
+  return res.json();
+}
+
+export function getBackupDownloadUrl() {
+  const token = getAuthToken();
+  return `${API_BASE}/backup/export?token=${token}`;
+}
+
+// ================= NETWORK & TIMER =================
 export async function fetchNetworkInfo() {
   const res = await fetch(`${API_BASE}/network-info`);
   return res.json();
 }
 
 export async function fetchTimerState() {
-  const res = await fetch(`${API_BASE}/timer`);
+  const res = await fetch(`${API_BASE}/timer`, { headers: getHeaders() });
   return res.json();
 }
 
 export async function updateTimerState(state) {
   const res = await fetch(`${API_BASE}/timer`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(),
     body: JSON.stringify(state)
   });
   return res.json();
 }
 
+// ================= TARGETS =================
 export async function fetchTargets() {
-  const res = await fetch(`${API_BASE}/targets`);
+  const res = await fetch(`${API_BASE}/targets`, { headers: getHeaders() });
   return res.json();
 }
 
 export async function createTarget(targetData) {
   const res = await fetch(`${API_BASE}/targets`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(),
     body: JSON.stringify(targetData)
   });
   return res.json();
@@ -38,7 +139,8 @@ export async function createTarget(targetData) {
 
 export async function toggleTargetCompletion(id) {
   const res = await fetch(`${API_BASE}/targets/${id}/toggle`, {
-    method: 'POST'
+    method: 'POST',
+    headers: getHeaders()
   });
   return res.json();
 }
@@ -46,7 +148,7 @@ export async function toggleTargetCompletion(id) {
 export async function updateTarget(id, updates) {
   const res = await fetch(`${API_BASE}/targets/${id}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(),
     body: JSON.stringify(updates)
   });
   return res.json();
@@ -54,20 +156,22 @@ export async function updateTarget(id, updates) {
 
 export async function deleteTarget(id) {
   const res = await fetch(`${API_BASE}/targets/${id}`, {
-    method: 'DELETE'
+    method: 'DELETE',
+    headers: getHeaders()
   });
   return res.json();
 }
 
+// ================= SESSIONS & ANALYTICS =================
 export async function fetchSessions() {
-  const res = await fetch(`${API_BASE}/sessions`);
+  const res = await fetch(`${API_BASE}/sessions`, { headers: getHeaders() });
   return res.json();
 }
 
 export async function saveSession(sessionData) {
   const res = await fetch(`${API_BASE}/sessions`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(),
     body: JSON.stringify(sessionData)
   });
   return res.json();
@@ -75,39 +179,41 @@ export async function saveSession(sessionData) {
 
 export async function deleteSession(id) {
   const res = await fetch(`${API_BASE}/sessions/${id}`, {
-    method: 'DELETE'
+    method: 'DELETE',
+    headers: getHeaders()
   });
   return res.json();
 }
 
 export async function fetchWeeklyAnalytics() {
-  const res = await fetch(`${API_BASE}/analytics/weekly`);
+  const res = await fetch(`${API_BASE}/analytics/weekly`, { headers: getHeaders() });
   return res.json();
 }
 
+// ================= NOTEPAD & SETTINGS =================
 export async function fetchNotepad() {
-  const res = await fetch(`${API_BASE}/notepad`);
+  const res = await fetch(`${API_BASE}/notepad`, { headers: getHeaders() });
   return res.json();
 }
 
 export async function saveNotepad(content) {
   const res = await fetch(`${API_BASE}/notepad`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(),
     body: JSON.stringify({ content })
   });
   return res.json();
 }
 
 export async function fetchSettings() {
-  const res = await fetch(`${API_BASE}/settings`);
+  const res = await fetch(`${API_BASE}/settings`, { headers: getHeaders() });
   return res.json();
 }
 
 export async function saveSettings(settingsData) {
   const res = await fetch(`${API_BASE}/settings`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(),
     body: JSON.stringify(settingsData)
   });
   return res.json();

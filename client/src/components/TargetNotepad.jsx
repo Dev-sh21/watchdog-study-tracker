@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatDurationHuman } from '../utils/timeFormat';
+import { createGoogleCalendarUrl, downloadIcsFile } from '../utils/calendar';
 import {
   CheckSquare,
   Square,
@@ -12,7 +13,10 @@ import {
   Calendar,
   Sparkles,
   ListTodo,
-  TrendingUp
+  TrendingUp,
+  ExternalLink,
+  Download,
+  CalendarPlus
 } from 'lucide-react';
 
 export default function TargetNotepad() {
@@ -26,15 +30,59 @@ export default function TargetNotepad() {
     handleStartTargetFocus
   } = useApp();
 
+  const todayStr = new Date().toISOString().split('T')[0];
+
   const [newTitle, setNewTitle] = useState('');
-  const [newSubject, setNewSubject] = useState(settings.subjects?.[0] || 'Engineering Mathematics');
+  const [newSubject, setNewSubject] = useState(settings.subjects?.[0] || 'General');
+  const [targetDate, setTargetDate] = useState(todayStr);
+  const [targetTime, setTargetTime] = useState('10:00');
+  const [durationMinutes, setDurationMinutes] = useState('120');
+  const [syncToGoogleCal, setSyncToGoogleCal] = useState(false);
   const [filter, setFilter] = useState('all'); // 'all', 'active', 'completed'
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
-    await handleCreateTarget(newTitle.trim(), newSubject);
+
+    await handleCreateTarget(newTitle.trim(), newSubject, targetDate);
+
+    // If Google Calendar sync requested, open event in new tab
+    if (syncToGoogleCal) {
+      const gcalUrl = createGoogleCalendarUrl({
+        title: newTitle.trim(),
+        subject: newSubject,
+        examName: settings.exam_name || 'GATE',
+        dateStr: targetDate,
+        timeStr: targetTime,
+        durationMinutes: Number(durationMinutes)
+      });
+      window.open(gcalUrl, '_blank', 'noopener,noreferrer');
+    }
+
     setNewTitle('');
+  };
+
+  const handleOpenGoogleCalendar = (target) => {
+    const gcalUrl = createGoogleCalendarUrl({
+      title: target.title,
+      subject: target.subject,
+      examName: settings.exam_name || 'GATE',
+      dateStr: target.target_date || todayStr,
+      timeStr: '10:00',
+      durationMinutes: 120
+    });
+    window.open(gcalUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleDownloadIcs = (target) => {
+    downloadIcsFile({
+      title: target.title,
+      subject: target.subject,
+      examName: settings.exam_name || 'GATE',
+      dateStr: target.target_date || todayStr,
+      timeStr: '10:00',
+      durationMinutes: 120
+    });
   };
 
   const activeTargets = targets.filter((t) => t.status !== 'completed');
@@ -90,41 +138,108 @@ export default function TargetNotepad() {
         </div>
       </div>
 
-      {/* Target Creator Form */}
-      <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 backdrop-blur-sm">
-        <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-indigo-400" />
-          <span>Add New Target / Goal for GATE</span>
-        </h3>
+      {/* Target Creator Form with Google Calendar Options */}
+      <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 backdrop-blur-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-indigo-400" />
+            <span>Add Study Target & Sync with Google Calendar</span>
+          </h3>
 
-        <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
-          <input
-            type="text"
-            placeholder="e.g. Solve 30 PYQs from Algorithms Graphs or OS Paging..."
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
+          <span className="text-[11px] text-indigo-400 font-medium flex items-center gap-1">
+            <CalendarPlus className="w-3.5 h-3.5" />
+            <span>Google Calendar Enabled</span>
+          </span>
+        </div>
 
-          <select
-            value={newSubject}
-            onChange={(e) => setNewSubject(e.target.value)}
-            className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer sm:w-56"
-          >
-            {settings.subjects?.map((sub) => (
-              <option key={sub} value={sub}>
-                {sub}
-              </option>
-            ))}
-          </select>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          {/* Title & Subject */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <input
+              type="text"
+              placeholder="e.g. Solve 30 PYQs from Algorithms, or Polity Laxmikanth Ch 7-10..."
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              required
+              className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
 
-          <button
-            type="submit"
-            className="flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold shadow-md shadow-indigo-600/20 transition cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Target</span>
-          </button>
+            <select
+              value={newSubject}
+              onChange={(e) => setNewSubject(e.target.value)}
+              className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer sm:w-60"
+            >
+              {settings.subjects?.map((sub) => (
+                <option key={sub} value={sub}>
+                  {sub}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Date, Time, Duration & Google Calendar Checkbox */}
+          <div className="flex flex-wrap items-center gap-3 text-xs bg-slate-950/40 p-3 rounded-xl border border-slate-800">
+            {/* Target Date */}
+            <div className="flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-slate-400" />
+              <label className="text-slate-400">Date:</label>
+              <input
+                type="date"
+                value={targetDate}
+                onChange={(e) => setTargetDate(e.target.value)}
+                className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none"
+              />
+            </div>
+
+            {/* Target Time */}
+            <div className="flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-slate-400" />
+              <label className="text-slate-400">Time:</label>
+              <input
+                type="time"
+                value={targetTime}
+                onChange={(e) => setTargetTime(e.target.value)}
+                className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none"
+              />
+            </div>
+
+            {/* Duration */}
+            <div className="flex items-center gap-1.5">
+              <label className="text-slate-400">Duration:</label>
+              <select
+                value={durationMinutes}
+                onChange={(e) => setDurationMinutes(e.target.value)}
+                className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none cursor-pointer"
+              >
+                <option value="60">1 Hour</option>
+                <option value="90">1.5 Hours</option>
+                <option value="120">2 Hours</option>
+                <option value="180">3 Hours</option>
+                <option value="240">4 Hours</option>
+              </select>
+            </div>
+
+            {/* Checkbox: Auto-Open Google Calendar */}
+            <label className="flex items-center gap-2 cursor-pointer ml-auto text-slate-300 font-medium">
+              <input
+                type="checkbox"
+                checked={syncToGoogleCal}
+                onChange={(e) => setSyncToGoogleCal(e.target.checked)}
+                className="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+              />
+              <span>Open in Google Calendar 📅</span>
+            </label>
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              className="flex items-center justify-center gap-1.5 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold shadow-md shadow-indigo-600/20 transition cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Target Goal</span>
+            </button>
+          </div>
         </form>
       </div>
 
@@ -151,7 +266,7 @@ export default function TargetNotepad() {
         </div>
 
         <span className="text-xs text-slate-500 hidden sm:inline">
-          Tip: Click the checkbox to mark done & see total time taken!
+          Tip: Click 📅 on any goal to add it straight to Google Calendar!
         </span>
       </div>
 
@@ -161,7 +276,7 @@ export default function TargetNotepad() {
           <div className="text-center py-12 bg-slate-900/30 rounded-2xl border border-slate-800/50">
             <CheckSquare className="w-10 h-10 text-slate-600 mx-auto mb-2" />
             <p className="text-slate-400 text-sm">No targets in this category.</p>
-            <p className="text-slate-500 text-xs mt-1">Add a new goal above to stay on track for GATE!</p>
+            <p className="text-slate-500 text-xs mt-1">Add a new goal above to stay ahead in your exam prep!</p>
           </div>
         ) : (
           filteredTargets.map((target) => {
@@ -182,9 +297,8 @@ export default function TargetNotepad() {
                     : 'bg-slate-900/70 border-slate-800 hover:border-slate-700'
                 }`}
               >
-                {/* Left: Checkbox & Title */}
+                {/* Left: Checkbox & Info */}
                 <div className="flex items-start gap-3.5 flex-1">
-                  {/* Interactive Tick Checkbox */}
                   <button
                     onClick={() => handleToggleTarget(target.id)}
                     className="mt-0.5 text-slate-400 hover:text-emerald-400 transition cursor-pointer flex-shrink-0"
@@ -214,11 +328,18 @@ export default function TargetNotepad() {
                       )}
                     </div>
 
-                    {/* Metadata tags */}
                     <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
                       <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700/60 font-medium">
                         {target.subject}
                       </span>
+
+                      {/* Target Date */}
+                      {target.target_date && (
+                        <span className="flex items-center gap-1 text-slate-400">
+                          <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Target: {target.target_date}</span>
+                        </span>
+                      )}
 
                       {/* Display exact time taken! */}
                       {currentAccumulated > 0 && (
@@ -235,7 +356,6 @@ export default function TargetNotepad() {
                         </span>
                       )}
 
-                      {/* Completed date if available */}
                       {isCompleted && target.completed_at && (
                         <span className="flex items-center gap-1 text-slate-500 text-[11px]">
                           <Calendar className="w-3 h-3" />
@@ -248,15 +368,37 @@ export default function TargetNotepad() {
                   </div>
                 </div>
 
-                {/* Right: Actions */}
-                <div className="flex items-center justify-end gap-2 self-end sm:self-center">
+                {/* Right: Calendar & Action Buttons */}
+                <div className="flex flex-wrap items-center justify-end gap-2 self-end sm:self-center">
+                  
+                  {/* Google Calendar 1-Click Button */}
+                  <button
+                    onClick={() => handleOpenGoogleCalendar(target)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-indigo-300 hover:text-indigo-200 text-xs font-medium transition cursor-pointer"
+                    title="Add this goal directly to Google Calendar"
+                  >
+                    <CalendarPlus className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Google Cal</span>
+                    <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+                  </button>
+
+                  {/* iCal / Apple Calendar Download Button */}
+                  <button
+                    onClick={() => handleDownloadIcs(target)}
+                    className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-slate-200 text-xs transition cursor-pointer"
+                    title="Download .ics event file (Apple / Phone Calendar)"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                  </button>
+
+                  {/* Focus study button */}
                   {!isCompleted && (
                     <button
                       onClick={() => handleStartTargetFocus(target)}
                       className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
                         isCurrentlyTracking
                           ? 'bg-indigo-600 text-white shadow-md'
-                          : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                          : 'bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/40'
                       }`}
                       title="Link this goal to stopwatch and start studying"
                     >

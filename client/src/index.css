@@ -12,6 +12,83 @@ body {
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
   overflow-x: hidden;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* Light Mode Overrides */
+body.light {
+  color-scheme: light;
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+body.light header {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+  border-color: #e2e8f0 !important;
+}
+
+body.light .bg-slate-900\/80,
+body.light .bg-slate-900\/60,
+body.light .bg-slate-900\/70,
+body.light .bg-slate-900\/90,
+body.light .bg-slate-900 {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+}
+
+body.light .bg-slate-950,
+body.light .bg-slate-950\/70,
+body.light .bg-slate-950\/80 {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+body.light .bg-slate-800,
+body.light .bg-slate-800\/80,
+body.light .bg-slate-800\/60,
+body.light .bg-slate-800\/40 {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #1e293b !important;
+}
+
+body.light .text-white {
+  color: #0f172a !important;
+}
+
+body.light .text-slate-100 {
+  color: #1e293b !important;
+}
+
+body.light .text-slate-200 {
+  color: #334155 !important;
+}
+
+body.light .text-slate-300 {
+  color: #475569 !important;
+}
+
+body.light .text-slate-400 {
+  color: #64748b !important;
+}
+
+body.light .border-slate-800,
+body.light .border-slate-700 {
+  border-color: #e2e8f0 !important;
+}
+
+body.light input,
+body.light select,
+body.light textarea {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+body.light .bg-slate-900\/95 {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-color: #e2e8f0 !important;
 }
 
 /* Custom sleek scrollbar */
@@ -21,7 +98,7 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.6);
+  background: rgba(15, 23, 42, 0.3);
 }
 
 ::-webkit-scrollbar-thumb {
@@ -33,7 +110,7 @@ body {
   background: rgba(148, 163, 184, 0.6);
 }
 
-/* Monospace digits for timer to prevent jitter */
+/* Monospace digits for timer */
 .font-mono-numbers {
   font-feature-settings: "tnum";
   font-variant-numeric: tabular-nums;
@@ -47,10 +124,6 @@ body {
 
 .glow-emerald {
   box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.35);
-}
-
-.glow-rose {
-  box-shadow: 0 0 25px -5px rgba(244, 63, 94, 0.35);
 }
 
 .glow-amber {

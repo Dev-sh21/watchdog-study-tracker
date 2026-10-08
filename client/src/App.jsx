@@ -10,32 +10,36 @@ import PhoneSyncModal from './components/PhoneSyncModal';
 import SettingsModal from './components/SettingsModal';
 import MobileBottomNav from './components/MobileBottomNav';
 import CompletionToast from './components/CompletionToast';
+import AuthModal from './components/AuthModal';
 
-function MainContent() {
-  const { activeTab } = useApp();
+function MainLayout() {
+  const { activeTab, isAuthModalOpen, setIsAuthModalOpen } = useApp();
 
   return (
-    <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 pb-24 md:pb-12 transition-all">
-      {activeTab === 'timer' && <StopwatchTimer />}
-      {activeTab === 'targets' && <TargetNotepad />}
-      {activeTab === 'analytics' && <WeeklyAnalytics />}
-      {activeTab === 'notepad' && <Scratchpad />}
-      {activeTab === 'history' && <SessionHistory />}
-    </main>
+    <div className="min-h-screen flex flex-col font-sans transition-colors duration-200">
+      <Header />
+      <CompletionToast />
+      
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 pb-24 md:pb-12 transition-all w-full flex-1">
+        {activeTab === 'timer' && <StopwatchTimer />}
+        {activeTab === 'targets' && <TargetNotepad />}
+        {activeTab === 'analytics' && <WeeklyAnalytics />}
+        {activeTab === 'notepad' && <Scratchpad />}
+        {activeTab === 'history' && <SessionHistory />}
+      </main>
+
+      <MobileBottomNav />
+      <PhoneSyncModal />
+      <SettingsModal />
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+    </div>
   );
 }
 
 export default function App() {
   return (
     <AppProvider>
-      <div className="min-h-screen bg-[#0b0f19] text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
-        <Header />
-        <CompletionToast />
-        <MainContent />
-        <MobileBottomNav />
-        <PhoneSyncModal />
-        <SettingsModal />
-      </div>
+      <MainLayout />
     </AppProvider>
   );
 }

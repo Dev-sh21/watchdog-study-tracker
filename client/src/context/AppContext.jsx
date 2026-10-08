@@ -6,13 +6,33 @@ import { sounds } from '../utils/audio';
 const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
+  // Current User & Auth State
+  const [currentUser, setCurrentUser] = useState(null);
+  const [availableUsers, setAvailableUsers] = useState([]);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+  // Theme State ('dark' | 'light')
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('watchdog_theme') || 'dark';
+  });
+
+  // Apply theme to document.body
+  useEffect(() => {
+    if (theme === 'light') {
+      document.body.classList.add('light');
+    } else {
+      document.body.classList.remove('light');
+    }
+    localStorage.setItem('watchdog_theme', theme);
+  }, [theme]);
+
   // Timer State
   const [timer, setTimer] = useState({
     is_running: false,
     elapsed_seconds: 0,
     start_time_ms: 0,
     active_target_id: null,
-    active_subject: 'Engineering Mathematics',
+    active_subject: 'General',
     laps: []
   });
 
@@ -25,43 +45,51 @@ export function AppProvider({ children }) {
     exam_name: 'GATE CSE / DA',
     exam_date: '2027-02-06',
     daily_goal_hours: 6.0,
-    subjects: [
-      'Engineering Mathematics',
-      'General Aptitude',
-      'Algorithms & DS',
-      'Operating Systems',
-      'Computer Networks',
-      'Database Systems (DBMS)',
-      'Theory of Computation',
-      'Compiler Design',
-      'Computer Architecture',
-      'Digital Logic'
-    ]
+    subjects: []
   });
   const [networkInfo, setNetworkInfo] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
 
-  // Modals & Active Tab
+  // Modals & Navigation Tabs
   const [activeTab, setActiveTab] = useState('timer'); // 'timer', 'targets', 'analytics', 'notepad', 'history'
   const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [completionToast, setCompletionToast] = useState(null);
 
-  // References
   const wsRef = useRef(null);
   const localTimerIntervalRef = useRef(null);
 
-  // Load initial data
-  const loadInitialData = useCallback(async () => {
+  // Load User Data & Application State
+  const loadUserData = useCallback(async () => {
     try {
-      const [timerRes, targetsRes, analyticsRes, sessionsRes, notepadRes, settingsRes, netRes] = await Promise.all([
+      const [user, usersList, netRes] = await Promise.all([
+        api.fetchCurrentUser().catch(() => null),
+        api.fetchUsersList().catch(() => []),
+        api.fetchNetworkInfo().catch(() => null)
+      ]);
+
+      if (user) {
+        setCurrentUser(user);
+        setSettings({
+          exam_name: user.exam_name,
+          exam_date: user.exam_date,
+          daily_goal_hours: user.daily_goal_hours,
+          subjects: user.subjects || []
+        });
+        if (user.theme) {
+          setTheme(user.theme);
+        }
+      }
+      if (usersList) setAvailableUsers(usersList);
+      if (netRes) setNetworkInfo(netRes);
+
+      // Fetch user-scoped data
+      const [timerRes, targetsRes, analyticsRes, sessionsRes, notepadRes] = await Promise.all([
         api.fetchTimerState().catch(() => null),
         api.fetchTargets().catch(() => []),
         api.fetchWeeklyAnalytics().catch(() => null),
         api.fetchSessions().catch(() => []),
-        api.fetchNotepad().catch(() => ({ content: '' })),
-        api.fetchSettings().catch(() => null),
-        api.fetchNetworkInfo().catch(() => null)
+        api.fetchNotepad().catch(() => ({ content: '' }))
       ]);
 
       if (timerRes) setTimer(timerRes);
@@ -69,23 +97,20 @@ export function AppProvider({ children }) {
       if (analyticsRes) setAnalytics(analyticsRes);
       if (sessionsRes) setSessions(sessionsRes);
       if (notepadRes) setNotepad(notepadRes);
-      if (settingsRes) setSettings(settingsRes);
-      if (netRes) setNetworkInfo(netRes);
     } catch (err) {
-      console.error('Error loading initial data:', err);
+      console.error('Error loading user data:', err);
     }
   }, []);
 
-  // WebSocket Setup for live syncing across laptop and mobile phone
+  // WebSocket Connection
   useEffect(() => {
-    loadInitialData();
+    loadUserData();
 
     let ws = null;
     let reconnectTimeout = null;
 
     function connectWs() {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      // If running through Vite proxy or direct port
       const wsUrl = `${protocol}//${window.location.host}/ws`;
 
       ws = new WebSocket(wsUrl);
@@ -93,6 +118,11 @@ export function AppProvider({ children }) {
 
       ws.onopen = () => {
         setIsConnected(true);
+        // Authenticate WebSocket with user's token
+        const token = api.getAuthToken();
+        if (token) {
+          ws.send(JSON.stringify({ type: 'AUTH', token }));
+        }
       };
 
       ws.onmessage = (event) => {
@@ -106,7 +136,6 @@ export function AppProvider({ children }) {
 
       ws.onclose = () => {
         setIsConnected(false);
-        // Try reconnecting after 2 seconds
         reconnectTimeout = setTimeout(connectWs, 2000);
       };
 
@@ -121,7 +150,7 @@ export function AppProvider({ children }) {
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
       if (ws) ws.close();
     };
-  }, [loadInitialData]);
+  }, [loadUserData]);
 
   // Handle incoming WebSocket messages
   const handleWsMessage = useCallback((msg) => {
@@ -149,7 +178,6 @@ export function AppProvider({ children }) {
         if (wasCompleted) {
           triggerCelebration(target.title, timeTakenFormatted);
         }
-        // Refresh analytics as goal was completed
         api.fetchWeeklyAnalytics().then(setAnalytics).catch(console.error);
         break;
       }
@@ -174,19 +202,11 @@ export function AppProvider({ children }) {
     }
   }, []);
 
-  // Confetti and celebration notification trigger
   const triggerCelebration = useCallback((title, duration) => {
     sounds.playFanfare();
-
     try {
-      confetti({
-        particleCount: 80,
-        spread: 70,
-        origin: { y: 0.6 }
-      });
-    } catch {
-      // fallback if canvas-confetti fails
-    }
+      confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+    } catch {}
 
     setCompletionToast({
       title,
@@ -199,7 +219,7 @@ export function AppProvider({ children }) {
     }, 6000);
   }, []);
 
-  // Client-side 1-second interval timer when is_running is true
+  // Timer Tick Interval
   useEffect(() => {
     if (timer.is_running) {
       localTimerIntervalRef.current = setInterval(() => {
@@ -209,28 +229,81 @@ export function AppProvider({ children }) {
         }));
       }, 1000);
     } else {
-      if (localTimerIntervalRef.current) {
-        clearInterval(localTimerIntervalRef.current);
-      }
+      if (localTimerIntervalRef.current) clearInterval(localTimerIntervalRef.current);
     }
 
     return () => {
-      if (localTimerIntervalRef.current) {
-        clearInterval(localTimerIntervalRef.current);
-      }
+      if (localTimerIntervalRef.current) clearInterval(localTimerIntervalRef.current);
     };
   }, [timer.is_running]);
 
-  // Periodic state sync to server if timer is running (every 10s to keep phone/laptop in sync)
+  // Periodic State Sync
   useEffect(() => {
     if (!timer.is_running) return;
-
     const syncInterval = setInterval(() => {
       api.updateTimerState(timer).catch(console.error);
     }, 10000);
-
     return () => clearInterval(syncInterval);
   }, [timer]);
+
+  // ==================== AUTH & PROFILE ACTIONS ====================
+
+  const login = async (username, password) => {
+    const user = await api.loginUser(username, password);
+    setCurrentUser(user);
+    if (user.theme) setTheme(user.theme);
+    await loadUserData();
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'AUTH', token: user.token }));
+    }
+  };
+
+  const register = async (username, name, password, exam) => {
+    const user = await api.registerUser(username, name, password, exam);
+    setCurrentUser(user);
+    if (user.theme) setTheme(user.theme);
+    await loadUserData();
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'AUTH', token: user.token }));
+    }
+  };
+
+  const switchProfile = async (userId) => {
+    const user = await api.switchUserAccount(userId);
+    setCurrentUser(user);
+    if (user.theme) setTheme(user.theme);
+    await loadUserData();
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'AUTH', token: user.token }));
+    }
+  };
+
+  const switchExam = async (examType) => {
+    const updated = await api.updateSelectedExam(examType);
+    setCurrentUser(updated);
+    setSettings({
+      exam_name: updated.exam_name,
+      exam_date: updated.exam_date,
+      daily_goal_hours: updated.daily_goal_hours,
+      subjects: updated.subjects || []
+    });
+    // Set timer active subject to first subject of new exam
+    if (updated.subjects && updated.subjects.length > 0) {
+      setTimerSubject(updated.subjects[0]);
+    }
+    const [freshAnalytics, freshTargets] = await Promise.all([
+      api.fetchWeeklyAnalytics(),
+      api.fetchTargets()
+    ]);
+    setAnalytics(freshAnalytics);
+    setTargets(freshTargets);
+  };
+
+  const toggleTheme = async () => {
+    const newTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+    await api.updateUserTheme(newTheme).catch(console.error);
+  };
 
   // ==================== TIMER ACTIONS ====================
 
@@ -282,11 +355,7 @@ export function AppProvider({ children }) {
     };
 
     const newLaps = [...timer.laps, newLap];
-    const newState = {
-      ...timer,
-      laps: newLaps
-    };
-
+    const newState = { ...timer, laps: newLaps };
     setTimer(newState);
     await api.updateTimerState(newState);
   };
@@ -299,7 +368,7 @@ export function AppProvider({ children }) {
     const startIso = new Date(Date.now() - timer.elapsed_seconds * 1000).toISOString();
 
     await api.saveSession({
-      subject: timer.active_subject || 'General',
+      subject: timer.active_subject || settings.subjects[0] || 'General',
       target_id: timer.active_target_id,
       duration_seconds: timer.elapsed_seconds,
       start_time: startIso,
@@ -308,7 +377,6 @@ export function AppProvider({ children }) {
       notes: notes
     });
 
-    // Reset local timer state
     setTimer((prev) => ({
       ...prev,
       is_running: false,
@@ -317,7 +385,6 @@ export function AppProvider({ children }) {
       laps: []
     }));
 
-    // Refresh analytics & sessions
     const [freshAnalytics, freshSessions, freshTargets] = await Promise.all([
       api.fetchWeeklyAnalytics(),
       api.fetchSessions(),
@@ -350,7 +417,7 @@ export function AppProvider({ children }) {
   const handleCreateTarget = async (title, subject, targetDate) => {
     const newTarget = await api.createTarget({
       title,
-      subject: subject || timer.active_subject,
+      subject: subject || timer.active_subject || settings.subjects[0],
       target_date: targetDate
     });
     setTargets((prev) => [newTarget, ...prev]);
@@ -375,7 +442,6 @@ export function AppProvider({ children }) {
   };
 
   const handleStartTargetFocus = async (target) => {
-    // Switch to active target and start timer immediately
     sounds.playStart();
     const newState = {
       ...timer,
@@ -398,7 +464,13 @@ export function AppProvider({ children }) {
 
   const handleSaveSettings = async (newSettings) => {
     const updated = await api.saveSettings(newSettings);
-    setSettings(updated);
+    setSettings({
+      exam_name: updated.exam_name,
+      exam_date: updated.exam_date,
+      daily_goal_hours: updated.daily_goal_hours,
+      subjects: updated.subjects || []
+    });
+    setCurrentUser(updated);
   };
 
   const handleDeleteSession = async (id) => {
@@ -411,6 +483,16 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider
       value={{
+        currentUser,
+        availableUsers,
+        theme,
+        toggleTheme,
+        isAuthModalOpen,
+        setIsAuthModalOpen,
+        login,
+        register,
+        switchProfile,
+        switchExam,
         timer,
         targets,
         analytics,
@@ -444,8 +526,7 @@ export function AppProvider({ children }) {
         handleSaveNotepad,
         handleSaveSettings,
         handleDeleteSession,
-        // Refresh
-        refreshAll: loadInitialData
+        refreshAll: loadUserData
       }}
     >
       {children}
