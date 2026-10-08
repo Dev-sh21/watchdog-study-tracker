@@ -1,0 +1,19 @@
+{
+  "name": "gate-watchdog",
+  "version": "1.0.0",
+  "description": "GATE Exam Preparation Timer, Stopwatch, Weekly Analytics & Target Notepad with Real-time Phone Sync",
+  "scripts": {
+    "dev": "node scripts/start-dev.js",
+    "start": "node server/server.js",
+    "build": "cd client && npm run build"
+  },
+  "keywords": [
+    "gate",
+    "study-timer",
+    "stopwatch",
+    "weekly-analytics",
+    "phone-sync"
+  ],
+  "author": "",
+  "license": "MIT"
+}
